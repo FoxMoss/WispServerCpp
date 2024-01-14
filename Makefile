@@ -1,8 +1,8 @@
 COMPILER = g++
 EXE = anonfox
 LIBS = -ljsoncpp
-FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17 
-DEBUG = -g -ggdb
+FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17 -O3
+# DEBUG = -g -ggdb
 SOURCES = $(wildcard ./*.cpp) 
 OBJ_DIR = obj
 OBJECTS = $(patsubst ./%.cpp,$(OBJ_DIR)/%.o,$(SOURCES))
