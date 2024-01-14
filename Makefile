@@ -1,4 +1,4 @@
-COMPILER = g++
+COMPILER = x86_64-linux-gnu-g++
 EXE = anonfox
 LIBS = -ljsoncpp
 FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17 -O3
