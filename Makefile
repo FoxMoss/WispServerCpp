@@ -1,5 +1,5 @@
 COMPILER = clang++
-EXE = game
+EXE = anonfox
 LIBS = -ljsoncpp
 FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17 
 DEBUG = -g -ggdb
