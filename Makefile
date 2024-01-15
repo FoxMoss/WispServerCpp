@@ -1,7 +1,7 @@
-COMPILER = x86_64-linux-gnu-g++
+COMPILER = g++
 EXE = anonfox
-LIBS = -ljsoncpp
-FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17 -O3
+LIBS = /usr/lib/x86_64-linux-gnu/libjsoncpp.so
+FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17 
 # DEBUG = -g -ggdb
 SOURCES = $(wildcard ./*.cpp) 
 OBJ_DIR = obj
@@ -12,6 +12,12 @@ LIBRARY_PATH = /usr/local/lib/
 all: $(EXE)	
 
 $(EXE): $(OBJECTS) 
-	$(COMPILER) -o $(EXE) $(DEBUG) $(OBJECTS) $(FlAGS) $(LIBS) -Wl,-rpath=$(LIBRARY_PATH)
-$(OBJ_DIR)/%.o: ./%.cpp $(wildcard ./*.hpp) Makefile
+	$(COMPILER) -o $(EXE) $(DEBUG) $(OBJECTS) $(FlAGS) $(LIBS)
+$(OBJ_DIR)/%.o: ./%.cpp $(wildcard ./*.hpp)
 	$(COMPILER) -c -o $@ $< $(FlAGS) $(DEBUG)
+
+dev: debug $(EXE)
+
+debug:
+	set DEBUG = -g -ggdb
+
