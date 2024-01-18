@@ -1,54 +1,55 @@
-#include "anonState.hpp"
+#include "wispServer.hpp"
 #include <cstdlib>
-#include <websocketpp/config/asio_no_tls.hpp>
-
-#include <websocketpp/server.hpp>
-
 #include <iostream>
-#include <jsoncpp/json/json.h>
+#include <string>
 
-typedef websocketpp::server<websocketpp::config::asio> server;
+server wispServer;
 
-using websocketpp::lib::bind;
-using websocketpp::lib::placeholders::_1;
-using websocketpp::lib::placeholders::_2;
+// stringify protocols??? unsure why
+bool validate_func_subprotocol(server *s, std::string *out, std::string accept,
+                               websocketpp::connection_hdl hdl) {
+  server::connection_ptr con = s->get_con_from_hdl(hdl);
+  *out = "wisp-v1, ";
 
-typedef server::message_ptr message_ptr;
-
-server anonFoxServer;
-AnonState *state;
-
-void on_message(server *s, websocketpp::connection_hdl hdl, message_ptr msg) {
-  if (msg->get_payload() == "stop-listening") {
-    s->stop_listening();
-    return;
+  if (!accept.empty()) {
+    con->select_subprotocol(accept);
   }
-  state->HandleMessage(hdl, msg->get_payload());
+  return true;
 }
 
-int main() {
-  state = new AnonState(&anonFoxServer);
+int main(int argv, char *argc[]) {
+  if (argv < 2) {
+    std::cout << "Port not specified\n";
+    return 0;
+  }
+
+  std::cout << "Starting on port " << argc[1] << "\n";
+
+  int port = std::stoi(argc[1]);
 
   try {
-    anonFoxServer.set_access_channels(websocketpp::log::alevel::none);
-    // anonFoxServer.clear_access_channels(websocketpp::log::alevel::frame_payload);
+    wispServer.set_access_channels(websocketpp::log::alevel::fail);
 
-    anonFoxServer.set_reuse_addr(true);
-    anonFoxServer.init_asio();
+    wispServer.set_reuse_addr(true);
+    wispServer.init_asio();
+    wispServer.set_user_agent("WispServer++");
+    std::string protcol;
 
-    anonFoxServer.set_message_handler(
-        bind(&on_message, &anonFoxServer, ::_1, ::_2));
+    wispServer.set_validate_handler(bind(
+        &validate_func_subprotocol, &wispServer, &protcol, "wisp-v1", ::_1));
+    wispServer.set_message_handler(bind(&on_message, &wispServer, ::_1, ::_2));
+    wispServer.set_open_handler(bind(&on_open, &wispServer, ::_1));
 
-    anonFoxServer.listen(6969);
+    wispServer.listen(port);
 
-    anonFoxServer.start_accept();
+    wispServer.start_accept();
 
-    anonFoxServer.run();
+    wispServer.run();
   } catch (websocketpp::exception const &e) {
     std::cout << e.what() << std::endl;
   } catch (...) {
     std::cout << "other exception" << std::endl;
   }
 
-  anonFoxServer.stop();
+  wispServer.stop();
 }

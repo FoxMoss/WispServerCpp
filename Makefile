@@ -1,23 +1,24 @@
 COMPILER = g++
-EXE = anonfox
-LIBS = /usr/lib/x86_64-linux-gnu/libjsoncpp.so
-FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17 
-# DEBUG = -g -ggdb
+EXE = out
+LIBS = -lpthread
+FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17
 SOURCES = $(wildcard ./*.cpp) 
 OBJ_DIR = obj
 OBJECTS = $(patsubst ./%.cpp,$(OBJ_DIR)/%.o,$(SOURCES))
 LIBRARY_PATH = /usr/local/lib/
+
+DEBUG = -g -ggdb
 
 
 all: $(EXE)	
 
 $(EXE): $(OBJECTS) 
 	$(COMPILER) -o $(EXE) $(DEBUG) $(OBJECTS) $(FlAGS) $(LIBS)
-$(OBJ_DIR)/%.o: ./%.cpp $(wildcard ./*.hpp)
+$(OBJ_DIR)/%.o: ./%.cpp
 	$(COMPILER) -c -o $@ $< $(FlAGS) $(DEBUG)
 
-dev: debug $(EXE)
+dev: debug
 
-debug:
+debug: $(EXE)
 	set DEBUG = -g -ggdb
 
