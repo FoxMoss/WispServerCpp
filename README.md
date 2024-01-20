@@ -28,9 +28,7 @@ The Makefile also needs a obj/ directory.
         - [ ] UDP (untested)
     - [x] Client Data Payload
     - [x] Server Data Payload
-    - [ ] Continue Payload (partial)
-        - [x] Initiating socket
-        - [ ] Reseting TCP Buffer
+    - [x] Continue Payload
     - [ ] Close Payload (partial)
         - [x] 0x01
         - [x] 0x02

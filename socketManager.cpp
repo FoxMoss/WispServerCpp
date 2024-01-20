@@ -38,16 +38,17 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
   }
 
   struct hostent *dns = gethostbyname(payload->hostname);
-  struct sockaddr *addrOut = (struct sockaddr *)malloc(sizeof(struct sockaddr));
+  struct sockaddr *addrOut = (struct sockaddr *)malloc(
+      sizeof(struct sockaddr_in) + sizeof(struct sockaddr_in6));
 
   if (dns == NULL) { // IP addr
-    // TODO: IPV6 neglect
     struct sockaddr_in *address = (struct sockaddr_in *)addrOut;
 
     address->sin_family = AF_INET;
     address->sin_port = htons(payload->port);
 
-    if (inet_pton(AF_INET, payload->hostname, address) <= 0) {
+    if (inet_pton(AF_INET, payload->hostname, address) <= 0 &&
+        inet_pton(AF_INET6, payload->hostname, address) <= 0) {
       set_exit_packet(s, hdl, streamId);
       return;
     }
@@ -110,16 +111,18 @@ void set_exit_packet(Server *s, websocketpp::connection_hdl hdl,
   }
 }
 void set_continue_packet(uint32_t bufferRemaining, Server *s,
-                         websocketpp::connection_hdl hdl) {
+                         websocketpp::connection_hdl hdl, uint32_t streamId) {
   if (!hdl.expired()) {
 
-    size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-    struct WispPacket *initPacket =
-        (struct WispPacket *)std::calloc(1, initSize);
-    initPacket->type = CONTINUE_PACKET;
-    *(uint32_t *)(&initPacket->payload) = bufferRemaining;
+    size_t continueSize = PACKET_SIZE((size_t)sizeof(uint32_t));
+    struct WispPacket *continuePacket =
+        (struct WispPacket *)std::calloc(1, continueSize);
+    continuePacket->type = CONTINUE_PACKET;
+    *(uint32_t *)(&continuePacket->payload) = bufferRemaining;
+    *(uint32_t *)(&continuePacket->type + sizeof(uint8_t)) = streamId;
 
-    s->send(hdl, initPacket, initSize, websocketpp::frame::opcode::BINARY);
+    s->send(hdl, continuePacket, continueSize,
+            websocketpp::frame::opcode::BINARY);
   }
 }
 void set_data_packet(char *data, size_t size, uint32_t streamId, Server *s,
@@ -140,7 +143,11 @@ void forward_data_packet(uint32_t streamId, Server *s,
                          size_t length) {
   for (auto id : socketManager) {
     if (id.first == streamId) {
+      std::cout << length << "\n";
       send(id.second.descriptor, data, length, 0);
+      if (id.second.type == TCP_TYPE) {
+        set_continue_packet(BUFFER_SIZE, s, hdl, streamId);
+      }
     }
   }
 }

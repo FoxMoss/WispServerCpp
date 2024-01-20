@@ -16,15 +16,14 @@ void on_message(server *s, websocketpp::connection_hdl hdl, message_ptr msg) {
   size_t payloadLength =
       (size_t)msg->get_payload().length() - sizeof(uint8_t) - sizeof(uint32_t);
   struct WispPacket *recvPacket =
-      (struct WispPacket *)malloc((size_t)msg->get_payload().length());
-  void *payloadRaw = malloc(payloadLength);
+      (struct WispPacket *)malloc((size_t)msg->get_payload().length() + 1);
+  void *payloadRaw = malloc(payloadLength + 1);
 
   try {
     const char *data = msg->get_payload().c_str();
 
     recvPacket->type = *(uint8_t *)data;
     recvPacket->streamId = *(uint32_t *)(data + sizeof(uint8_t));
-    std::cout << "packet :" << recvPacket->streamId << "\n";
     memcpy(&recvPacket->payload, data + sizeof(uint8_t) + sizeof(uint32_t),
            payloadLength);
 
@@ -79,4 +78,5 @@ void on_open(server *s, websocketpp::connection_hdl hdl) {
   *(uint32_t *)((char *)&initPacket->payload - 3) = 0x80;
 
   s->send(hdl, initPacket, initSize - 3, websocketpp::frame::opcode::BINARY);
+  free(initPacket);
 }

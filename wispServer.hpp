@@ -16,6 +16,8 @@ using websocketpp::lib::placeholders::_2;
 typedef server::message_ptr message_ptr;
 
 #define BUFFER_SIZE 128
+#define TCP_TYPE 0x01
+#define UDP_TYPE 0x02
 
 #define CONNECT_PACKET 0x01
 #define DATA_PACKET 0x02
@@ -49,7 +51,8 @@ void on_open(server *s, websocketpp::connection_hdl hdl);
 void set_exit_packet(Server *s, websocketpp::connection_hdl hdl,
                      uint32_t streamId = 0, char signal = 0x01);
 void set_continue_packet(uint32_t bufferRemaining, Server *s,
-                         websocketpp::connection_hdl hdl);
+                         websocketpp::connection_hdl hdl,
+                         uint32_t streamId = 0);
 void open_socket(ConnectPayload *payload, uint32_t streamId, Server *s,
                  websocketpp::connection_hdl hdl);
 bool validate_func_subprotocol(server *s, std::string *out, std::string accept,
