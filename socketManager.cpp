@@ -22,7 +22,6 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
   SocketReference reference = {};
 
   reference.streamId = streamId;
-  std::cout << streamId << "got id\n";
   reference.hdl = hdl;
   reference.s = s;
   reference.type = payload->type;
@@ -40,8 +39,6 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
 
   struct hostent *dns = gethostbyname(payload->hostname);
   struct sockaddr *addrOut = (struct sockaddr *)malloc(sizeof(struct sockaddr));
-
-  std::cout << payload->hostname << "\n";
 
   if (dns == NULL) { // IP addr
     // TODO: IPV6 neglect
@@ -96,36 +93,47 @@ void watch_thread(uint32_t streamId) {
 void set_exit_packet(Server *s, websocketpp::connection_hdl hdl,
                      uint32_t streamId, char signal) {
 
-  size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-  struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
-  initPacket->type = EXIT_PACKET;
-  *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
-  *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
+  if (streamId != 0) {
+    socketManager.erase(streamId);
+  }
+  if (!hdl.expired()) {
+    size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
+    struct WispPacket *initPacket =
+        (struct WispPacket *)std::calloc(1, initSize);
+    initPacket->type = EXIT_PACKET;
+    *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
+    *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
 
-  s->send(hdl, initPacket, initSize - 3, websocketpp::frame::opcode::BINARY);
+    s->send(hdl, initPacket, initSize - 3, websocketpp::frame::opcode::BINARY);
 
-  s->close(hdl, websocketpp::close::status::normal, "");
+    s->close(hdl, websocketpp::close::status::normal, "");
+  }
 }
 void set_continue_packet(uint32_t bufferRemaining, Server *s,
                          websocketpp::connection_hdl hdl) {
-  size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-  struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
-  initPacket->type = CONTINUE_PACKET;
-  *(uint32_t *)(&initPacket->payload) = bufferRemaining;
+  if (!hdl.expired()) {
 
-  s->send(hdl, initPacket, initSize, websocketpp::frame::opcode::BINARY);
+    size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
+    struct WispPacket *initPacket =
+        (struct WispPacket *)std::calloc(1, initSize);
+    initPacket->type = CONTINUE_PACKET;
+    *(uint32_t *)(&initPacket->payload) = bufferRemaining;
+
+    s->send(hdl, initPacket, initSize, websocketpp::frame::opcode::BINARY);
+  }
 }
 void set_data_packet(char *data, size_t size, uint32_t streamId, Server *s,
                      websocketpp::connection_hdl hdl) {
-  size_t dataSize = PACKET_SIZE(size);
-  struct WispPacket *dataPacket = (struct WispPacket *)std::calloc(1, dataSize);
-  dataPacket->type = DATA_PACKET;
-  memcpy((char *)&dataPacket->payload - 3, data, size);
-  *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;
+  if (!hdl.expired()) {
+    size_t dataSize = PACKET_SIZE(size);
+    struct WispPacket *dataPacket =
+        (struct WispPacket *)std::calloc(1, dataSize);
+    dataPacket->type = DATA_PACKET;
+    memcpy((char *)&dataPacket->payload - 3, data, size);
+    *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;
 
-  std::cout << dataPacket->streamId << "sent id " << streamId << "\n";
-
-  s->send(hdl, dataPacket, dataSize, websocketpp::frame::opcode::BINARY);
+    s->send(hdl, dataPacket, dataSize, websocketpp::frame::opcode::BINARY);
+  }
 }
 void forward_data_packet(uint32_t streamId, Server *s,
                          websocketpp::connection_hdl hdl, char *data,
