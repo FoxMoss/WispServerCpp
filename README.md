@@ -29,17 +29,15 @@ The Makefile also needs a obj/ directory.
     - [x] Client Data Payload
     - [x] Server Data Payload
     - [x] Continue Payload
-    - [ ] Close Payload (partial)
-        - [x] 0x01
-        - [x] 0x02
-        - [ ] 0x03
-        - [ ] 0x41
-        - [ ] 0x42
-        - [ ] 0x43
-        - [ ] 0x44
-        - [ ] 0x45
-        - [ ] 0x46
-        - [ ] 0x47
-        - [ ] 0x48
-        - [ ] 0x49
-        - [ ] 0x89
+    - [x] Close Payload (only necessary)
+        - [x] 0x01 Unknown
+        - [x] 0x02 Voluntary Closure (N/A)
+        - [x] 0x03 Network Error
+        - [x] 0x41 Creation Invalid
+        - [x] 0x42 Host Unreachable
+        - [x] 0x43 Creation Timeout
+        - [x] 0x44 Connection Refused
+        - [ ] 0x47 Tcp Timeout
+        - [ ] 0x48 Server Blocked Host 
+        - [ ] 0x49 Server Throttling
+        - [x] 0x81 Client Memory Error (N/A)

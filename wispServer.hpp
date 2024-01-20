@@ -16,8 +16,21 @@ using websocketpp::lib::placeholders::_2;
 typedef server::message_ptr message_ptr;
 
 #define BUFFER_SIZE 128
+
 #define TCP_TYPE 0x01
 #define UDP_TYPE 0x02
+
+#define ERROR_UNKNOWN 0x01
+#define ERROR_RESET 0x02
+#define ERROR_NETWORK_ERROR 0x03
+#define ERROR_INVALID_CONNECTION 0x41
+#define ERROR_UNREACHABLE 0x42
+#define ERROR_CONNECTION_TIMEOUT 0x43
+#define ERROR_REFUSED 0x44
+#define ERROR_DATA_TIMEOUT 0x47
+#define ERROR_BLOCKED 0x48
+#define ERROR_THROTTLED 0x49
+#define ERROR_CLIENT 0x89
 
 #define CONNECT_PACKET 0x01
 #define DATA_PACKET 0x02

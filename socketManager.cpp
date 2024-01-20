@@ -1,6 +1,8 @@
 #include "wispServer.hpp"
 #include <arpa/inet.h>
+#include <asm-generic/errno.h>
 #include <byteswap.h>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -33,7 +35,7 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
 
   reference.descriptor = socket(AF_INET, type, 0);
   if (reference.descriptor < 0) {
-    set_exit_packet(s, hdl, streamId);
+    set_exit_packet(s, hdl, streamId, ERROR_UNKNOWN);
     return;
   }
 
@@ -49,7 +51,7 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
 
     if (inet_pton(AF_INET, payload->hostname, address) <= 0 &&
         inet_pton(AF_INET6, payload->hostname, address) <= 0) {
-      set_exit_packet(s, hdl, streamId);
+      set_exit_packet(s, hdl, streamId, ERROR_INVALID_CONNECTION);
       return;
     }
   } else { // domain
@@ -68,7 +70,19 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
     }
   }
   if (connect(reference.descriptor, addrOut, sizeof(struct sockaddr)) < 0) {
-    set_exit_packet(s, hdl, streamId);
+    switch (errno) {
+    case ETIMEDOUT:
+      set_exit_packet(s, hdl, streamId, ERROR_CONNECTION_TIMEOUT);
+      break;
+    case ECONNREFUSED:
+      set_exit_packet(s, hdl, streamId, ERROR_REFUSED);
+      break;
+    case ENETUNREACH:
+      set_exit_packet(s, hdl, streamId, ERROR_UNREACHABLE);
+      break;
+    default:
+      set_exit_packet(s, hdl, streamId, ERROR_INVALID_CONNECTION);
+    }
     return;
   }
 
@@ -81,11 +95,18 @@ void watch_thread(uint32_t streamId) {
   for (auto id : socketManager) {
     if (id.first == streamId) {
       char buffer[2048];
-      size_t size;
-      while ((size = recv(id.second.descriptor, buffer, 2048, 0))) {
+      ssize_t size;
+      while ((size = recv(id.second.descriptor, buffer, 2048, 0)) > 0) {
         set_data_packet(buffer, size, id.first, id.second.s, id.second.hdl);
       }
-      set_exit_packet(id.second.s, id.second.hdl, id.first, 2);
+      if (size != 0) {
+        switch (errno) {
+        case ECONNREFUSED:
+          set_exit_packet(id.second.s, id.second.hdl, streamId, ERROR_REFUSED);
+        default:
+          set_exit_packet(id.second.s, id.second.hdl, streamId, ERROR_UNKNOWN);
+        }
+      }
       return;
     }
   }
@@ -143,8 +164,18 @@ void forward_data_packet(uint32_t streamId, Server *s,
                          size_t length) {
   for (auto id : socketManager) {
     if (id.first == streamId) {
-      std::cout << length << "\n";
-      send(id.second.descriptor, data, length, 0);
+      ssize_t error = send(id.second.descriptor, data, length, 0);
+      if (error == -1) {
+        switch (errno) {
+        case ECONNRESET:
+          set_exit_packet(id.second.s, id.second.hdl, streamId,
+                          ERROR_NETWORK_ERROR);
+          break;
+        default:
+          set_exit_packet(id.second.s, id.second.hdl, streamId, ERROR_UNKNOWN);
+        }
+        return;
+      }
       if (id.second.type == TCP_TYPE) {
         set_continue_packet(BUFFER_SIZE, s, hdl, streamId);
       }
