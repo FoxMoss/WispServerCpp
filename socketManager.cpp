@@ -69,7 +69,8 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
       address->sin6_addr = *((struct in6_addr *)(dns->h_addr_list[0]));
     }
   }
-  if (connect(reference.descriptor, addrOut, sizeof(struct sockaddr)) < 0) {
+  if (payload->type == TCP_TYPE && // udp doesnt connect
+      connect(reference.descriptor, addrOut, sizeof(struct sockaddr)) < 0) {
     switch (errno) {
     case ETIMEDOUT:
       set_exit_packet(s, hdl, streamId, ERROR_CONNECTION_TIMEOUT);
@@ -85,6 +86,7 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
     }
     return;
   }
+  reference.addr = addrOut;
 
   socketManager[streamId] = reference;
 
@@ -96,8 +98,17 @@ void watch_thread(uint32_t streamId) {
     if (id.first == streamId) {
       char buffer[2048];
       ssize_t size;
-      while ((size = recv(id.second.descriptor, buffer, 2048, 0)) > 0) {
-        set_data_packet(buffer, size, id.first, id.second.s, id.second.hdl);
+      if (id.second.type == TCP_TYPE) {
+        while ((size = recv(id.second.descriptor, buffer, 2048, 0)) > 0) {
+          set_data_packet(buffer, size, id.first, id.second.s, id.second.hdl);
+        }
+      } else { // udp
+        socklen_t addrSize = sizeof(struct sockaddr);
+        while ((size = recvfrom(id.second.descriptor, buffer, 2048, 0,
+                                id.second.addr, &addrSize)) > 0) {
+          buffer[size] = '\0';
+          set_data_packet(buffer, size, id.first, id.second.s, id.second.hdl);
+        }
       }
       if (size != 0) {
         switch (errno) {
@@ -164,7 +175,13 @@ void forward_data_packet(uint32_t streamId, Server *s,
                          size_t length) {
   for (auto id : socketManager) {
     if (id.first == streamId) {
-      ssize_t error = send(id.second.descriptor, data, length, 0);
+      ssize_t error;
+      if (id.second.type == TCP_TYPE) {
+        error = send(id.second.descriptor, data, length, 0);
+      } else {
+        error = sendto(id.second.descriptor, data, length, 0, id.second.addr,
+                       sizeof(struct sockaddr));
+      }
       if (error == -1) {
         switch (errno) {
         case ECONNRESET:

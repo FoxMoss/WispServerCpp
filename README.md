@@ -2,7 +2,7 @@
 
 A C++ project implementing the [wisp protocol](https://github.com/MercuryWorkshop/wisp-protocol), a minimal overhead websocket proxy.
 
-This was made to take full advantage of the low overhead of the protocol by reducing memory usage compared to the author's implementation in python.
+This was made to take full advantage of the low overhead of the protocol by reducing memory usage compared to the author's implementation in python. The repo also has UDP support and better error error handling then the original implementation.
 
 ## Usage
 
@@ -23,9 +23,9 @@ The Makefile also needs a obj/ directory.
 ## Implementation Status
 
 - [x] Base Packet Handling
-    - [ ] Connect Payload (partial)
+    - [x] Connect Payload (partial)
         - [x] TCP
-        - [ ] UDP (untested)
+        - [x] UDP
     - [x] Client Data Payload
     - [x] Server Data Payload
     - [x] Continue Payload

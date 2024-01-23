@@ -57,6 +57,7 @@ struct SocketReference {
   uint8_t type; // 0x01 == tcp 0x02 == udp
   server *s;
   websocketpp::connection_hdl hdl;
+  struct sockaddr *addr;
 };
 
 void on_message(server *s, websocketpp::connection_hdl hdl, message_ptr msg);
