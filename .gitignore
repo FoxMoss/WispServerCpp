@@ -1,2 +1,4 @@
 obj/
+node_modules/
+build/
 wispserver
