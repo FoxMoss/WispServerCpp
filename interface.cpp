@@ -1,3 +1,4 @@
+#include "interface.hpp"
 #include "wispServer.hpp"
 #include <bits/types/error_t.h>
 #include <cstddef>
@@ -12,7 +13,7 @@
 #include <vector>
 #include <websocketpp/close.hpp>
 
-void message_interface(void (*sendCallback)(void *, size_t), std::string msg) {
+void message_interface(SEND_CALLBACK_TYPE, std::string msg, uint32_t id) {
   size_t payloadLength =
       (size_t)msg.length() - sizeof(uint8_t) - sizeof(uint32_t);
   struct WispPacket *recvPacket =
@@ -43,19 +44,19 @@ void message_interface(void (*sendCallback)(void *, size_t), std::string msg) {
 
       payload->hostname[payloadLength - 3] = 0;
 
-      // open_socket(payload, recvPacket->streamId, s, hdl);
+      open_socket(payload, recvPacket->streamId, sendCallback, id);
 
     } break;
     case 0x02: {
       char *payload = (char *)payloadRaw;
       memcpy(payload, (char *)((char *)&recvPacket->payload), payloadLength);
-      // forward_data_packet(recvPacket->streamId, s, hdl, payload,
-      // payloadLength);
+      forward_data_packet(recvPacket->streamId, sendCallback, id, payload,
+                          payloadLength);
     } break;
 
     case 0x04: // ?? i think im supposed to do error handling here
     {
-      // set_exit_packet(s, hdl, recvPacket->streamId);
+      set_exit_packet(sendCallback, id, recvPacket->streamId);
     } break;
     default:
       break;
@@ -72,12 +73,12 @@ void message_interface(void (*sendCallback)(void *, size_t), std::string msg) {
   free(recvPacket);
 }
 
-void open_callback(void (*sendCallback)(void *, size_t)) {
+void open_interface(SEND_CALLBACK_TYPE, uint32_t id) {
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
   initPacket->type = CONTINUE_PACKET;
   *(uint32_t *)((char *)&initPacket->payload - 3) = 0x80;
 
-  (sendCallback)(initPacket, initSize - 3);
+  (sendCallback)(initPacket, initSize - 3, id, false);
   free(initPacket);
 }

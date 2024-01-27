@@ -1,3 +1,4 @@
+#include "cppBinding.hpp"
 #include "wispServer.hpp"
 #include <cstdlib>
 #include <iostream>
@@ -7,6 +8,12 @@ server wispServer;
 
 bool validate_func_subprotocol(server *s, std::string *out, std::string accept,
                                websocketpp::connection_hdl hdl) {
+  server::connection_ptr con = s->get_con_from_hdl(hdl);
+  *out = "wisp-v1, ";
+
+  if (!accept.empty()) {
+    con->select_subprotocol(accept);
+  }
   return true;
 }
 

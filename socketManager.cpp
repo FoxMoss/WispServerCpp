@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <map>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,13 +21,12 @@
 
 std::map<uint32_t, SocketReference> socketManager;
 
-void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
-                 websocketpp::connection_hdl hdl) {
+void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
+                 uint32_t id) {
   SocketReference reference = {};
 
   reference.streamId = streamId;
-  reference.hdl = hdl;
-  reference.s = s;
+  reference.id = id;
   reference.type = payload->type;
 
   int type = SOCK_STREAM;
@@ -35,7 +36,7 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
 
   reference.descriptor = socket(AF_INET, type, 0);
   if (reference.descriptor < 0) {
-    set_exit_packet(s, hdl, streamId, ERROR_UNKNOWN);
+    set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
     return;
   }
 
@@ -51,7 +52,7 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
 
     if (inet_pton(AF_INET, payload->hostname, address) <= 0 &&
         inet_pton(AF_INET6, payload->hostname, address) <= 0) {
-      set_exit_packet(s, hdl, streamId, ERROR_INVALID_CONNECTION);
+      set_exit_packet(sendCallback, streamId, ERROR_INVALID_CONNECTION);
       return;
     }
   } else { // domain
@@ -73,16 +74,16 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
       connect(reference.descriptor, addrOut, sizeof(struct sockaddr)) < 0) {
     switch (errno) {
     case ETIMEDOUT:
-      set_exit_packet(s, hdl, streamId, ERROR_CONNECTION_TIMEOUT);
+      set_exit_packet(sendCallback, streamId, ERROR_CONNECTION_TIMEOUT);
       break;
     case ECONNREFUSED:
-      set_exit_packet(s, hdl, streamId, ERROR_REFUSED);
+      set_exit_packet(sendCallback, streamId, ERROR_REFUSED);
       break;
     case ENETUNREACH:
-      set_exit_packet(s, hdl, streamId, ERROR_UNREACHABLE);
+      set_exit_packet(sendCallback, streamId, ERROR_UNREACHABLE);
       break;
     default:
-      set_exit_packet(s, hdl, streamId, ERROR_INVALID_CONNECTION);
+      set_exit_packet(sendCallback, streamId, ERROR_INVALID_CONNECTION);
     }
     return;
   }
@@ -90,32 +91,32 @@ void open_socket(struct ConnectPayload *payload, uint32_t streamId, Server *s,
 
   socketManager[streamId] = reference;
 
-  std::thread watch(watch_thread, streamId);
+  std::thread watch(watch_thread, streamId, sendCallback);
   watch.detach();
 }
-void watch_thread(uint32_t streamId) {
+void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
   for (auto id : socketManager) {
     if (id.first == streamId) {
       char buffer[2048];
       ssize_t size;
       if (id.second.type == TCP_TYPE) {
         while ((size = recv(id.second.descriptor, buffer, 2048, 0)) > 0) {
-          set_data_packet(buffer, size, id.first, id.second.s, id.second.hdl);
+          set_data_packet(buffer, size, id.first, sendCallback, id.second.id);
         }
       } else { // udp
         socklen_t addrSize = sizeof(struct sockaddr);
         while ((size = recvfrom(id.second.descriptor, buffer, 2048, 0,
                                 id.second.addr, &addrSize)) > 0) {
           buffer[size] = '\0';
-          set_data_packet(buffer, size, id.first, id.second.s, id.second.hdl);
+          set_data_packet(buffer, size, id.first, sendCallback, id.second.id);
         }
       }
       if (size != 0) {
         switch (errno) {
         case ECONNREFUSED:
-          set_exit_packet(id.second.s, id.second.hdl, streamId, ERROR_REFUSED);
+          set_exit_packet(sendCallback, streamId, ERROR_REFUSED);
         default:
-          set_exit_packet(id.second.s, id.second.hdl, streamId, ERROR_UNKNOWN);
+          set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
         }
       }
       return;
@@ -123,56 +124,44 @@ void watch_thread(uint32_t streamId) {
   }
 }
 
-void set_exit_packet(Server *s, websocketpp::connection_hdl hdl,
-                     uint32_t streamId, char signal) {
+void set_exit_packet(SEND_CALLBACK_TYPE, uint32_t id, uint32_t streamId,
+                     char signal) {
 
   if (streamId != 0) {
     socketManager.erase(streamId);
   }
-  if (!hdl.expired()) {
-    size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-    struct WispPacket *initPacket =
-        (struct WispPacket *)std::calloc(1, initSize);
-    initPacket->type = EXIT_PACKET;
-    *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
-    *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
+  size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
+  struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
+  initPacket->type = EXIT_PACKET;
+  *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
+  *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
 
-    s->send(hdl, initPacket, initSize - 3, websocketpp::frame::opcode::BINARY);
-
-    s->close(hdl, websocketpp::close::status::normal, "");
-  }
+  sendCallback(initPacket, initSize - 3, id, true);
 }
-void set_continue_packet(uint32_t bufferRemaining, Server *s,
-                         websocketpp::connection_hdl hdl, uint32_t streamId) {
-  if (!hdl.expired()) {
+void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE,
+                         uint32_t id, uint32_t streamId) {
 
-    size_t continueSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-    struct WispPacket *continuePacket =
-        (struct WispPacket *)std::calloc(1, continueSize);
-    continuePacket->type = CONTINUE_PACKET;
-    *(uint32_t *)(&continuePacket->payload) = bufferRemaining;
-    *(uint32_t *)(&continuePacket->type + sizeof(uint8_t)) = streamId;
+  size_t continueSize = PACKET_SIZE((size_t)sizeof(uint32_t));
+  struct WispPacket *continuePacket =
+      (struct WispPacket *)std::calloc(1, continueSize);
+  continuePacket->type = CONTINUE_PACKET;
+  *(uint32_t *)(&continuePacket->payload) = bufferRemaining;
+  *(uint32_t *)(&continuePacket->type + sizeof(uint8_t)) = streamId;
 
-    s->send(hdl, continuePacket, continueSize,
-            websocketpp::frame::opcode::BINARY);
-  }
+  sendCallback(continuePacket, continueSize, id, false);
 }
-void set_data_packet(char *data, size_t size, uint32_t streamId, Server *s,
-                     websocketpp::connection_hdl hdl) {
-  if (!hdl.expired()) {
-    size_t dataSize = PACKET_SIZE(size);
-    struct WispPacket *dataPacket =
-        (struct WispPacket *)std::calloc(1, dataSize);
-    dataPacket->type = DATA_PACKET;
-    memcpy((char *)&dataPacket->payload - 3, data, size);
-    *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;
+void set_data_packet(char *data, size_t size, uint32_t streamId,
+                     SEND_CALLBACK_TYPE, uint32_t id) {
+  size_t dataSize = PACKET_SIZE(size);
+  struct WispPacket *dataPacket = (struct WispPacket *)std::calloc(1, dataSize);
+  dataPacket->type = DATA_PACKET;
+  memcpy((char *)&dataPacket->payload - 3, data, size);
+  *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;
 
-    s->send(hdl, dataPacket, dataSize, websocketpp::frame::opcode::BINARY);
-  }
+  sendCallback(dataPacket, dataSize, id, false);
 }
-void forward_data_packet(uint32_t streamId, Server *s,
-                         websocketpp::connection_hdl hdl, char *data,
-                         size_t length) {
+void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, uint32_t id,
+                         char *data, size_t length) {
   for (auto id : socketManager) {
     if (id.first == streamId) {
       ssize_t error;
@@ -185,16 +174,15 @@ void forward_data_packet(uint32_t streamId, Server *s,
       if (error == -1) {
         switch (errno) {
         case ECONNRESET:
-          set_exit_packet(id.second.s, id.second.hdl, streamId,
-                          ERROR_NETWORK_ERROR);
+          set_exit_packet(sendCallback, streamId, ERROR_NETWORK_ERROR);
           break;
         default:
-          set_exit_packet(id.second.s, id.second.hdl, streamId, ERROR_UNKNOWN);
+          set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
         }
         return;
       }
       if (id.second.type == TCP_TYPE) {
-        set_continue_packet(BUFFER_SIZE, s, hdl, streamId);
+        set_continue_packet(BUFFER_SIZE, sendCallback, streamId);
       }
     }
   }
