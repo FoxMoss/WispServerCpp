@@ -6,7 +6,7 @@
 #include <vector>
 
 #define BUFFER_SIZE 128
-#define READ_SIZE 1024
+#define READ_SIZE 1019
 
 #define TCP_TYPE 0x01
 #define UDP_TYPE 0x02

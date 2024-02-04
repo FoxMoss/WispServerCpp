@@ -1,65 +1,126 @@
-#include "../interface.hpp"
+#include "nodeBinding.hpp"
+#include <condition_variable>
+#include <cstdint>
 #include <cstdio>
-#include <node.h>
-#include <v8-primitive.h>
-#include <v8.h>
+#include <cstdlib>
+#include <cstring>
+#include <map>
+#include <napi.h>
+#include <thread>
+#include <vector>
 
-using v8::Context;
-using v8::Exception;
-using v8::Function;
-using v8::FunctionCallbackInfo;
-using v8::Isolate;
-using v8::Local;
-using v8::Object;
-using v8::String;
-using v8::Uint32;
-using v8::Value;
-Local<Context> context;
-Local<Function> cb;
-Isolate *isolate;
+uint32_t nextId = 0;
+std::mutex mtx;
+std::condition_variable cv;
+Napi::ThreadSafeFunction tsfn;
+std::thread nativeThread;
+struct sendMessage {
+  char *data;
+  size_t size;
+  uint32_t id;
+  bool exit;
+};
+std::vector<struct sendMessage> messageStack;
 
-std::string ManuallyCopyString(char *data, size_t size) {
-  std::string ret;
-  for (size_t i = 0; i < size; i++) {
-    ret += data[size];
-  }
-  return ret;
-}
 void sendCallback(void *data, size_t size, uint32_t id, bool exit) {
-  const unsigned argc = 1;
-  std::string dataString = ManuallyCopyString((char *)data, size);
-  Local<Value> argv[argc] = {String::NewFromUtf8(isolate, (char *)data,
-                                                 v8::NewStringType::kNormal,
-                                                 size - 1)
-                                 .ToLocalChecked()};
+  std::unique_lock<std::mutex> lock(mtx);
 
-  cb->Call(context, Null(isolate), argc, argv).ToLocalChecked();
-}
-// args: id, sendcallback
-void Open(const FunctionCallbackInfo<Value> &args) {
-  isolate = args.GetIsolate();
+  struct sendMessage message;
 
-  if (args.Length() < 2) {
-    isolate->ThrowException(Exception::TypeError(
-        String::NewFromUtf8(isolate, "Wrong number of arguments")
-            .ToLocalChecked()));
-    return;
-  }
+  message.data = (char *)malloc(size);
 
-  if (!args[0]->IsUint32() && !args[1]->IsFunction()) {
-    isolate->ThrowException(Exception::TypeError(
-        String::NewFromUtf8(isolate, "Wrong argument").ToLocalChecked()));
-    return;
-  }
+  memcpy(message.data, data, size);
+  message.size = size;
+  message.id = id;
+  message.exit = exit;
+  messageStack.push_back(message);
 
-  context = isolate->GetCurrentContext();
-  cb = Local<Function>::Cast(args[1]);
-
-  open_interface(sendCallback, args[0].As<Uint32>()->Value());
+  lock.unlock();
+  cv.notify_one();
 }
 
-void Initialize(Local<Object> exports) {
-  NODE_SET_METHOD(exports, "Open", Open);
+// sendCallback
+Napi::Value Init(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  tsfn = Napi::ThreadSafeFunction::New(env, info[0].As<Napi::Function>(),
+                                       "Callback Watcher", 0, 1,
+                                       [](Napi::Env) { nativeThread.join(); });
+
+  nativeThread = std::thread([env] {
+    auto callback = [](Napi::Env env, Napi::Function jsCallback,
+                       struct sendMessage *value) {
+      char *data = value->data;
+      size_t size = value->size;
+      size_t id = value->id;
+      bool exit = value->exit;
+
+      Napi::TypedArrayOf<uint8_t> message =
+          Napi::TypedArrayOf<uint8_t>::New(env, size);
+      memcpy(message.Data(), data, size);
+
+      Napi::Value exitVal = Napi::Boolean::New(env, exit);
+      Napi::Value idVal = Napi::Number::New(env, id);
+
+      std::vector<Napi::Value> argv = {exitVal, message, idVal};
+
+      jsCallback.Call(argv);
+      free(value);
+    };
+    while (true) {
+      std::unique_lock<std::mutex> lock(mtx);
+
+      cv.wait(lock, [] { return !messageStack.empty(); });
+
+      struct sendMessage *messageQueued =
+          (struct sendMessage *)malloc(sizeof(struct sendMessage));
+
+      memcpy(messageQueued, messageStack.begin().base(),
+             sizeof(struct sendMessage));
+
+      tsfn.BlockingCall(messageQueued, callback);
+      messageStack.erase(messageStack.begin());
+    }
+  });
+
+  Napi::Promise::Deferred promise(env);
+
+  return promise.Promise();
 }
 
-NODE_MODULE(NODE_GYP_MODULE_NAME, Initialize)
+// args: id
+Napi::Value Open(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  uint32_t id = info[0].As<Napi::Number>().Uint32Value();
+
+  open_interface(sendCallback, id);
+  return info[0];
+}
+
+// args: id, message
+Napi::Value Message(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  uint32_t id = info[0].As<Napi::Number>().Uint32Value();
+  std::string cppString = info[1].As<Napi::String>().Utf8Value();
+
+  message_interface(sendCallback, cppString, id);
+  return info[0];
+}
+
+Napi::Value NextID(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  return Napi::Number::New(env, nextId++);
+}
+
+Napi::Object Initialize(Napi::Env env, Napi::Object exports) {
+  exports.Set("NextID", Napi::Function::New(env, NextID));
+  exports.Set("Open", Napi::Function::New(env, Open));
+  exports.Set("Message", Napi::Function::New(env, Message));
+  exports.Set("Init", Napi::Function::New(env, Init));
+
+  return exports;
+}
+
+NODE_API_MODULE(wispservercpp, Initialize)

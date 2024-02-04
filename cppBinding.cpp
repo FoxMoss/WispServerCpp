@@ -28,6 +28,7 @@ void send_callback(void *buffer, size_t size, uint32_t id, bool exit = false) {
   if (exit) {
     serverRef->close(idMap[id], websocketpp::close::status::normal, "");
   }
+  // free(buffer);
 }
 void on_open(Server *s, websocketpp::connection_hdl hdl) {
   serverRef = s;

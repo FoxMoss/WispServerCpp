@@ -29,6 +29,8 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   reference.id = id;
   reference.type = payload->type;
 
+  std::cout << "Connection for: " << payload->hostname << "\n";
+
   int type = SOCK_STREAM;
   if (payload->type == 0x02) {
     type = SOCK_DGRAM;
@@ -93,19 +95,20 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
 
   std::thread watch(watch_thread, streamId, sendCallback);
   watch.detach();
+  // watch_thread(streamId, sendCallback);
 }
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
   for (auto id : socketManager) {
     if (id.first == streamId) {
-      char buffer[2048];
+      char buffer[READ_SIZE];
       ssize_t size;
       if (id.second.type == TCP_TYPE) {
-        while ((size = recv(id.second.descriptor, buffer, 2048, 0)) > 0) {
+        while ((size = recv(id.second.descriptor, buffer, READ_SIZE, 0)) > 0) {
           set_data_packet(buffer, size, id.first, sendCallback, id.second.id);
         }
       } else { // udp
         socklen_t addrSize = sizeof(struct sockaddr);
-        while ((size = recvfrom(id.second.descriptor, buffer, 2048, 0,
+        while ((size = recvfrom(id.second.descriptor, buffer, READ_SIZE, 0,
                                 id.second.addr, &addrSize)) > 0) {
           buffer[size] = '\0';
           set_data_packet(buffer, size, id.first, sendCallback, id.second.id);
@@ -182,7 +185,8 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, uint32_t id,
         return;
       }
       if (id.second.type == TCP_TYPE) {
-        set_continue_packet(BUFFER_SIZE, sendCallback, streamId);
+        // TODO: set_continue_packet(BUFFER_SIZE, sendCallback, streamId);
+        // breaking node?
       }
     }
   }
