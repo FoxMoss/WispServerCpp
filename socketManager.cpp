@@ -95,7 +95,6 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
 
   std::thread watch(watch_thread, streamId, sendCallback);
   watch.detach();
-  // watch_thread(streamId, sendCallback);
 }
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
   for (auto id : socketManager) {
@@ -122,6 +121,7 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
           set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
         }
       }
+      set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
       return;
     }
   }

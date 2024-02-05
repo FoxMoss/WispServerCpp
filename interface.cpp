@@ -62,14 +62,6 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, uint32_t id) {
     break;
   }
 
-  // } catch (const std::exception &e) {
-  //   std::cout << "An error occcured \n";
-  //
-  //   free(payloadRaw);
-  //   free(recvPacket);
-  //   return;
-  // }
-  free(payloadRaw);
   free(recvPacket);
 }
 
