@@ -3,7 +3,7 @@
 #include <string>
 
 #define SEND_CALLBACK_TYPE                                                     \
-  void (*sendCallback)(void *, size_t, uint32_t id, bool exit)
+  void (*sendCallback)(void *, size_t, void *id, bool exit)
 
-void message_interface(SEND_CALLBACK_TYPE, std::string msg, uint32_t id);
-void open_interface(SEND_CALLBACK_TYPE, uint32_t id);
+void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id);
+void open_interface(SEND_CALLBACK_TYPE, void *id);

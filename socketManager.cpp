@@ -22,7 +22,7 @@
 std::map<uint32_t, SocketReference> socketManager;
 
 void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
-                 uint32_t id) {
+                 void *id) {
   SocketReference reference = {};
 
   reference.streamId = streamId;
@@ -38,7 +38,7 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
 
   reference.descriptor = socket(AF_INET, type, 0);
   if (reference.descriptor < 0) {
-    set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
+    set_exit_packet(sendCallback, id, streamId, ERROR_UNKNOWN);
     return;
   }
 
@@ -54,7 +54,7 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
 
     if (inet_pton(AF_INET, payload->hostname, address) <= 0 &&
         inet_pton(AF_INET6, payload->hostname, address) <= 0) {
-      set_exit_packet(sendCallback, streamId, ERROR_INVALID_CONNECTION);
+      set_exit_packet(sendCallback, id, streamId, ERROR_INVALID_CONNECTION);
       return;
     }
   } else { // domain
@@ -76,16 +76,16 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
       connect(reference.descriptor, addrOut, sizeof(struct sockaddr)) < 0) {
     switch (errno) {
     case ETIMEDOUT:
-      set_exit_packet(sendCallback, streamId, ERROR_CONNECTION_TIMEOUT);
+      set_exit_packet(sendCallback, id, streamId, ERROR_CONNECTION_TIMEOUT);
       break;
     case ECONNREFUSED:
-      set_exit_packet(sendCallback, streamId, ERROR_REFUSED);
+      set_exit_packet(sendCallback, id, streamId, ERROR_REFUSED);
       break;
     case ENETUNREACH:
-      set_exit_packet(sendCallback, streamId, ERROR_UNREACHABLE);
+      set_exit_packet(sendCallback, id, streamId, ERROR_UNREACHABLE);
       break;
     default:
-      set_exit_packet(sendCallback, streamId, ERROR_INVALID_CONNECTION);
+      set_exit_packet(sendCallback, id, streamId, ERROR_INVALID_CONNECTION);
     }
     return;
   }
@@ -103,6 +103,7 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
       ssize_t size;
       if (id.second.type == TCP_TYPE) {
         while ((size = recv(id.second.descriptor, buffer, READ_SIZE, 0)) > 0) {
+
           set_data_packet(buffer, size, id.first, sendCallback, id.second.id);
         }
       } else { // udp
@@ -116,18 +117,18 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
       if (size != 0) {
         switch (errno) {
         case ECONNREFUSED:
-          set_exit_packet(sendCallback, streamId, ERROR_REFUSED);
+          set_exit_packet(sendCallback, id.second.id, streamId, ERROR_REFUSED);
         default:
-          set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
+          set_exit_packet(sendCallback, id.second.id, streamId, ERROR_UNKNOWN);
         }
       }
-      set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
+      set_exit_packet(sendCallback, id.second.id, streamId, ERROR_UNKNOWN);
       return;
     }
   }
 }
 
-void set_exit_packet(SEND_CALLBACK_TYPE, uint32_t id, uint32_t streamId,
+void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
                      char signal) {
 
   if (streamId != 0) {
@@ -141,8 +142,8 @@ void set_exit_packet(SEND_CALLBACK_TYPE, uint32_t id, uint32_t streamId,
 
   sendCallback(initPacket, initSize - 3, id, true);
 }
-void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE,
-                         uint32_t id, uint32_t streamId) {
+void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
+                         uint32_t streamId) {
 
   size_t continueSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   struct WispPacket *continuePacket =
@@ -154,16 +155,18 @@ void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE,
   sendCallback(continuePacket, continueSize, id, false);
 }
 void set_data_packet(char *data, size_t size, uint32_t streamId,
-                     SEND_CALLBACK_TYPE, uint32_t id) {
+                     SEND_CALLBACK_TYPE, void *id) {
   size_t dataSize = PACKET_SIZE(size);
   struct WispPacket *dataPacket = (struct WispPacket *)std::calloc(1, dataSize);
   dataPacket->type = DATA_PACKET;
   memcpy((char *)&dataPacket->payload - 3, data, size);
   *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;
 
+  printf("hey\n");
+
   sendCallback(dataPacket, dataSize, id, false);
 }
-void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, uint32_t id,
+void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                          char *data, size_t length) {
   for (auto id : socketManager) {
     if (id.first == streamId) {
@@ -177,10 +180,11 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, uint32_t id,
       if (error == -1) {
         switch (errno) {
         case ECONNRESET:
-          set_exit_packet(sendCallback, streamId, ERROR_NETWORK_ERROR);
+          set_exit_packet(sendCallback, id.second.id, streamId,
+                          ERROR_NETWORK_ERROR);
           break;
         default:
-          set_exit_packet(sendCallback, streamId, ERROR_UNKNOWN);
+          set_exit_packet(sendCallback, id.second.id, streamId, ERROR_UNKNOWN);
         }
         return;
       }

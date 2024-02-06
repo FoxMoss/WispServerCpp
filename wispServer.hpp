@@ -46,18 +46,18 @@ struct SocketReference {
   int descriptor;
   uint32_t streamId;
   uint8_t type; // 0x01 == tcp 0x02 == udp
-  uint32_t id;
+  void *id;
   struct sockaddr *addr;
 };
 
-void set_exit_packet(SEND_CALLBACK_TYPE, uint32_t id, uint32_t streamId = 0,
+void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId = 0,
                      char signal = 0x01);
-void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE,
-                         uint32_t id, uint32_t streamId = 0);
+void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
+                         uint32_t streamId = 0);
 void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
-                 uint32_t id);
-void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, uint32_t id,
+                 void *id);
+void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                          char *data, size_t length);
 void set_data_packet(char *data, size_t size, uint32_t streamId,
-                     SEND_CALLBACK_TYPE, uint32_t id);
+                     SEND_CALLBACK_TYPE, void *id);
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE);

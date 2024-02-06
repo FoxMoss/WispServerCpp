@@ -15,34 +15,42 @@
 #include <sys/types.h>
 #include <vector>
 #include <websocketpp/close.hpp>
+#include <websocketpp/common/connection_hdl.hpp>
+#include <websocketpp/connection.hpp>
+#include <websocketpp/connection_base.hpp>
 
-std::map<uint32_t, websocketpp::connection_hdl> idMap;
 Server *serverRef;
-uint32_t nextID = 0;
 
-void send_callback(void *buffer, size_t size, uint32_t id, bool exit = false) {
-  if (idMap[id].expired()) {
+using ConnectionPtr =
+    websocketpp::endpoint<websocketpp::connection<websocketpp::config::asio>,
+                          websocketpp::config::asio>::connection_ptr;
+void send_callback(void *buffer, size_t size, void *id, bool exit = false) {
+
+  websocketpp::endpoint<websocketpp::connection<websocketpp::config::asio>,
+                        websocketpp::config::asio>::connection_ptr con =
+      *std::static_pointer_cast<ConnectionPtr>(
+          *static_cast<std::shared_ptr<void> *>(id));
+
+  if (con->get_state() == websocketpp::session::state::closing ||
+      con->get_state() == websocketpp::session::state::closed) {
     return;
   }
-  serverRef->send(idMap[id], buffer, size, websocketpp::frame::opcode::BINARY);
+  con->send(buffer, size, websocketpp::frame::opcode::BINARY);
   if (exit) {
-    serverRef->close(idMap[id], websocketpp::close::status::normal, "");
+    con->close(websocketpp::close::status::normal, "");
   }
   // free(buffer);
 }
 void on_open(Server *s, websocketpp::connection_hdl hdl) {
   serverRef = s;
-  idMap[nextID] = hdl;
-  open_interface(send_callback, nextID);
-  ++nextID;
+  websocketpp::endpoint<websocketpp::connection<websocketpp::config::asio>,
+                        websocketpp::config::asio>::connection_ptr ref =
+      s->get_con_from_hdl(hdl);
+
+  open_interface(send_callback, ref.get());
 }
 void on_message(server *s, websocketpp::connection_hdl hdl, message_ptr msg) {
-  uint32_t id;
-  for (auto member : idMap) {
-    if (s->get_con_from_hdl(hdl) == s->get_con_from_hdl(member.second)) {
-      id = member.first;
-    }
-  }
+  auto ref = s->get_con_from_hdl(hdl);
 
-  message_interface(send_callback, msg->get_payload(), id);
+  message_interface(send_callback, msg->get_payload(), ref.get());
 }
