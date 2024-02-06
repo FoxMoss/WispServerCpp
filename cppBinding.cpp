@@ -37,9 +37,7 @@ void send_callback(void *buffer, size_t size, void *id, bool exit = false) {
   }
   con->send(buffer, size, websocketpp::frame::opcode::BINARY);
   if (exit) {
-    con->close(websocketpp::close::status::normal, "");
   }
-  // free(buffer);
 }
 void on_open(Server *s, websocketpp::connection_hdl hdl) {
   serverRef = s;
