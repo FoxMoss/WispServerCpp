@@ -189,8 +189,7 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
         return;
       }
       if (id.second.type == TCP_TYPE) {
-        // TODO: set_continue_packet(BUFFER_SIZE, sendCallback, streamId);
-        // breaking node?
+        set_continue_packet(BUFFER_SIZE, sendCallback, id.second.id, streamId);
       }
     }
   }
