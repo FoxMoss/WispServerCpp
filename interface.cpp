@@ -14,7 +14,6 @@
 #include <websocketpp/close.hpp>
 
 void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
-  printf("message %p\n", id);
 
   size_t payloadLength =
       (size_t)msg.length() - sizeof(uint8_t) - sizeof(uint32_t);
@@ -68,8 +67,6 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 }
 
 void open_interface(SEND_CALLBACK_TYPE, void *id) {
-  printf("open %p\n", id);
-
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
   initPacket->type = CONTINUE_PACKET;

@@ -162,8 +162,6 @@ void set_data_packet(char *data, size_t size, uint32_t streamId,
   memcpy((char *)&dataPacket->payload - 3, data, size);
   *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;
 
-  printf("hey\n");
-
   sendCallback(dataPacket, dataSize, id, false);
 }
 void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
