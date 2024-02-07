@@ -131,7 +131,7 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
 void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
                      char signal) {
 
-  if (streamId != 0) {
+  if (streamId != 0 && socketManager.find(streamId) != socketManager.end()) {
     socketManager.erase(streamId);
   }
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
