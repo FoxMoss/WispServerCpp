@@ -1,5 +1,11 @@
 # WispServerC++
 
+
+> [!WARNING]  
+> Current websocket library crashes randomly. A migration to UWS C++ binding is in progress,
+> for now check out the node binding [wisp-server-cpp](https://github.com/FoxMoss/wisp-server-cpp).
+
+
 A C++ project implementing the [wisp protocol](https://github.com/MercuryWorkshop/wisp-protocol), a minimal overhead websocket proxy.
 
 This was made to take full advantage of the low overhead of the protocol by reducing memory usage compared to the author's implementation in python. The repo also has UDP support and better error error handling then the original implementation.
