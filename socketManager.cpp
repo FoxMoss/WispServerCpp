@@ -192,3 +192,12 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
     }
   }
 }
+
+void close_sockets(void *id) {
+  for (auto sock = socketManager.begin(); sock != socketManager.end(); sock++) {
+    if (sock->second.id == id) {
+      close(sock->second.descriptor);
+      socketManager.erase(sock);
+    }
+  }
+}
