@@ -72,6 +72,6 @@ void open_interface(SEND_CALLBACK_TYPE, void *id) {
   initPacket->type = CONTINUE_PACKET;
   *(uint32_t *)((char *)&initPacket->payload - 3) = 0x80;
 
-  (sendCallback)(initPacket, initSize - 3, id, false);
+  (sendCallback)(initPacket, initSize, id, false);
   free(initPacket);
 }
