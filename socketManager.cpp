@@ -29,7 +29,8 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   reference.id = id;
   reference.type = payload->type;
 
-  std::cout << "Connection for: " << payload->hostname << "\n";
+  std::cout << "Connection for: " << payload->hostname << " on id " << streamId
+            << "\n";
 
   int type = SOCK_STREAM;
   if (payload->type == 0x02) {
@@ -196,6 +197,7 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
 void close_sockets(void *id) {
   for (auto sock = socketManager.begin(); sock != socketManager.end(); sock++) {
     if (sock->second.id == id) {
+      std::cout << "Closed socket with id: " << sock->second.streamId;
       close(sock->second.descriptor);
       socketManager.erase(sock);
     }
