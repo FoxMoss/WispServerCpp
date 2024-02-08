@@ -75,3 +75,5 @@ void open_interface(SEND_CALLBACK_TYPE, void *id) {
   (sendCallback)(initPacket, initSize, id, false);
   free(initPacket);
 }
+
+void close_interface(SEND_CALLBACK_TYPE, void *id) { close_sockets(id); }
