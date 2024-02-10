@@ -7,3 +7,4 @@
 
 void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id);
 void open_interface(SEND_CALLBACK_TYPE, void *id);
+void close_interface(SEND_CALLBACK_TYPE, void *id);
