@@ -18,8 +18,10 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include <mutex>
 
 std::map<uint32_t, SocketReference> socketManager;
+std::mutex socketGaurd;
 
 void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
                  void *id) {
@@ -92,7 +94,9 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   }
   reference.addr = addrOut;
 
+  socketGaurd.lock();
   socketManager[streamId] = reference;
+  socketGaurd.unlock();
 
   std::thread watch(watch_thread, streamId, sendCallback);
   watch.detach();
@@ -196,6 +200,7 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
 }
 
 void close_sockets(void *id) {
+  socketGaurd.lock();
   for (auto sock = socketManager.begin(); sock != socketManager.end(); sock++) {
     if (sock->second.id == id) {
       std::cout << "Closed socket with id: " << sock->second.streamId;
@@ -203,4 +208,5 @@ void close_sockets(void *id) {
       socketManager.erase(sock);
     }
   }
+  socketGaurd.unlock();
 }
