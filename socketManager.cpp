@@ -98,7 +98,8 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   watch.detach();
 }
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
-  for (auto id : socketManager) {
+  std::map<uint32_t, SocketReference> copy = socketManager;
+  for (auto id : copy) {
     if (id.first == streamId) {
       char buffer[READ_SIZE];
       ssize_t size;
