@@ -19,36 +19,28 @@ int main(int argv, char *argc[]) {
 
   std::vector<std::thread *> threads(std::thread::hardware_concurrency());
 
-  std::transform(
-      threads.begin(), threads.end(), threads.begin(), [](std::thread * /*t*/) {
-        return new std::thread([]() {
-          uWS::App()
-              .ws<PerSocketData>(
-                  "*",
-                  {
-                      .upgrade =
-                          [](auto *res, auto *req, auto *context) {
-                            res->template upgrade<PerSocketData>(
-                                {}, req->getHeader("sec-websocket-key"),
-                                "wisp-v1",
-                                req->getHeader("sec-websocket-extensions"),
-                                context);
-                          },
-                      .open = on_open,
-                      .message = on_message,
-                  })
-              .listen(port,
-                      [](auto *listen_socket) {
-                        if (listen_socket) {
-                          std::cout << "Thread " << std::this_thread::get_id()
-                                    << " listening on port " << port
-                                    << std::endl;
-                        }
-                      })
-              .run();
-        });
-      });
+  auto app =
+      uWS::App()
+          .ws<PerSocketData>(
+              "*",
+              {
+                  .upgrade =
+                      [](auto *res, auto *req, auto *context) {
+                        res->template upgrade<PerSocketData>(
+                            {}, req->getHeader("sec-websocket-key"), "wisp-v1",
+                            req->getHeader("sec-websocket-extensions"),
+                            context);
+                      },
+                  .open = on_open,
+                  .message = on_message,
+              })
+          .listen(port, [](auto *listen_socket) {
+            if (listen_socket) {
+              std::cout << "Thread " << std::this_thread::get_id()
+                        << " listening on port " << port << std::endl;
+            }
+          });
+  init();
 
-  std::for_each(threads.begin(), threads.end(),
-                [](std::thread *t) { t->join(); });
+  app.run();
 }

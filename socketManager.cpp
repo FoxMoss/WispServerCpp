@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -18,7 +19,6 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
-#include <mutex>
 
 std::map<uint32_t, SocketReference> socketManager;
 std::mutex socketGaurd;
@@ -146,7 +146,7 @@ void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
   *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
   *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
 
-  sendCallback(initPacket, initSize - 3, id, true);
+  sendCallback(initPacket, initSize - 3, id, false);
 }
 void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
                          uint32_t streamId) {

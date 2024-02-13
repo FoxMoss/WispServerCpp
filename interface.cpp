@@ -73,7 +73,6 @@ void open_interface(SEND_CALLBACK_TYPE, void *id) {
   *(uint32_t *)((char *)&initPacket->payload - 3) = 0x80;
 
   (sendCallback)(initPacket, initSize, id, false);
-  free(initPacket);
 }
 
 void close_interface(SEND_CALLBACK_TYPE, void *id) { close_sockets(id); }
