@@ -1,15 +1,9 @@
 #pragma once
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
+#include <uWebSockets/App.h>
 
-typedef websocketpp::server<websocketpp::config::asio> server;
-typedef websocketpp::server<websocketpp::config::asio> Server;
+#define SSL 0
+struct PerSocketData {};
 
-using websocketpp::lib::bind;
-using websocketpp::lib::placeholders::_1;
-using websocketpp::lib::placeholders::_2;
-
-typedef server::message_ptr message_ptr;
-
-void on_message(server *s, websocketpp::connection_hdl hdl, message_ptr msg);
-void on_open(server *s, websocketpp::connection_hdl hdl);
+void on_message(uWS::WebSocket<SSL, true, PerSocketData> *ws,
+                std::string_view message, uWS::OpCode opCode);
+void on_open(uWS::WebSocket<SSL, true, PerSocketData> *ws);

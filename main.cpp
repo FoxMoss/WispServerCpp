@@ -1,21 +1,11 @@
 #include "cppBinding.hpp"
 #include "wispServer.hpp"
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <string>
 
-server wispServer;
-
-bool validate_func_subprotocol(server *s, std::string *out, std::string accept,
-                               websocketpp::connection_hdl hdl) {
-  server::connection_ptr con = s->get_con_from_hdl(hdl);
-  *out = "wisp-v1, ";
-
-  if (!accept.empty()) {
-    con->select_subprotocol(accept);
-  }
-  return true;
-}
+int port;
 
 int main(int argv, char *argc[]) {
   if (argv < 2) {
@@ -25,31 +15,40 @@ int main(int argv, char *argc[]) {
 
   std::cout << "Starting on port " << argc[1] << "\n";
 
-  int port = std::stoi(argc[1]);
+  port = std::stoi(argc[1]);
 
-  try {
-    wispServer.set_access_channels(websocketpp::log::alevel::fail);
+  std::vector<std::thread *> threads(std::thread::hardware_concurrency());
 
-    wispServer.set_reuse_addr(true);
-    wispServer.init_asio();
-    wispServer.set_user_agent("WispServer++");
-    std::string protcol;
+  std::transform(
+      threads.begin(), threads.end(), threads.begin(), [](std::thread * /*t*/) {
+        return new std::thread([]() {
+          uWS::App()
+              .ws<PerSocketData>(
+                  "*",
+                  {
+                      .upgrade =
+                          [](auto *res, auto *req, auto *context) {
+                            res->template upgrade<PerSocketData>(
+                                {}, req->getHeader("sec-websocket-key"),
+                                "wisp-v1",
+                                req->getHeader("sec-websocket-extensions"),
+                                context);
+                          },
+                      .open = on_open,
+                      .message = on_message,
+                  })
+              .listen(port,
+                      [](auto *listen_socket) {
+                        if (listen_socket) {
+                          std::cout << "Thread " << std::this_thread::get_id()
+                                    << " listening on port " << port
+                                    << std::endl;
+                        }
+                      })
+              .run();
+        });
+      });
 
-    wispServer.set_validate_handler(bind(
-        &validate_func_subprotocol, &wispServer, &protcol, "wisp-v1", ::_1));
-    wispServer.set_message_handler(bind(&on_message, &wispServer, ::_1, ::_2));
-    wispServer.set_open_handler(bind(&on_open, &wispServer, ::_1));
-
-    wispServer.listen(port);
-
-    wispServer.start_accept();
-
-    wispServer.run();
-  } catch (websocketpp::exception const &e) {
-    std::cout << e.what() << std::endl;
-  } catch (...) {
-    std::cout << "other exception" << std::endl;
-  }
-
-  wispServer.stop();
+  std::for_each(threads.begin(), threads.end(),
+                [](std::thread *t) { t->join(); });
 }

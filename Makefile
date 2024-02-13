@@ -1,6 +1,6 @@
 COMPILER = g++
 EXE = wispserver
-LIBS = -lpthread
+LIBS = -lpthread -lusockets -lz
 FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17
 SOURCES = $(wildcard ./*.cpp) 
 OBJ_DIR = obj
