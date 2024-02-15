@@ -1,14 +1,9 @@
 # WispServerC++
-
-
-> [!WARNING]  
-> Current websocket library crashes randomly. A migration to UWS C++ binding is in progress,
-> for now check out the node binding [wisp-server-cpp](https://github.com/FoxMoss/wisp-server-cpp).
-
-
 A C++ project implementing the [wisp protocol](https://github.com/MercuryWorkshop/wisp-protocol), a minimal overhead websocket proxy.
 
-This was made to take full advantage of the low overhead of the protocol by reducing memory usage compared to the author's implementation in python. The repo also has UDP support and better error error handling then the original implementation.
+This was made to take full advantage of the low overhead of the protocol by reducing memory usage compared to the [author's implementation in python](https://github.com/MercuryWorkshop/wisp-server-python/). The repo also has UDP support and better error error handling then the original implementation.
+
+Checkout [wisp-server-cpp](https://github.com/FoxMoss/wisp-server-cpp) for node intergration or [wisp-server-node](https://github.com/MercuryWorkshop/wisp-server-node/) for worse support. 
 
 ## Usage
 
@@ -17,8 +12,9 @@ This was made to take full advantage of the low overhead of the protocol by redu
 ## Install
 
 Requirements:
-- libboost
-- libwebsocketpp
+- zlib
+- pthreads
+- uWebSockets
 
 To make with debug symbols make with DEBUG set to TRUE
 `make DEBUG="-g -ggdb"`
@@ -47,3 +43,6 @@ The Makefile also needs a obj/ directory.
         - [ ] 0x48 Server Blocked Host 
         - [ ] 0x49 Server Throttling
         - [x] 0x81 Client Memory Error (N/A)
+
+# Credits
+- [epoxy-tls](https://github.com/mercuryWorkshop/epoxy-tls) for testing
