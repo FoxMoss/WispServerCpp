@@ -11,6 +11,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <sys/types.h>
 #include <uWebSockets/WebSocketProtocol.h>
@@ -23,6 +24,8 @@ struct Message {
   bool exit = false;
 };
 std::vector<Message> messageStack;
+std::vector<Message> offStack;
+std::mutex messageLock;
 
 void send_callback(void *buffer, size_t size, void *id, bool exit = false) {
   messageStack.push_back({buffer, size, id, exit});
@@ -42,6 +45,8 @@ void init() {
   us_timer_set( // stupid but only way to link back into the main thread
       delayTimer,
       [](struct us_timer_t *t) {
+        messageLock.lock();
+        std::map<void *, bool> freeChecker;
         while (!messageStack.empty()) {
           auto nextMessage = messageStack.begin().base();
 
@@ -50,16 +55,23 @@ void init() {
 
           std::string_view message((char *)nextMessage->buffer,
                                    nextMessage->size);
-          ws->send(message, uWS::OpCode::BINARY);
+          if (ws != NULL) {
+            ws->send(message, uWS::OpCode::BINARY);
 
-          if (nextMessage->exit) {
-            ws->close();
+            if (nextMessage->exit) {
+              ws->close();
+            }
           }
 
-          free(nextMessage->buffer);
+          if (freeChecker.find(nextMessage->buffer) == freeChecker.end()) {
+            freeChecker[nextMessage->buffer] = true;
+            free(nextMessage->buffer);
+          }
 
+          offStack.push_back(*messageStack.begin().base());
           messageStack.erase(messageStack.begin());
         }
+        messageLock.unlock();
       },
       1, 1);
 }

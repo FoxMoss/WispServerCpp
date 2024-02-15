@@ -36,8 +36,6 @@ int main(int argv, char *argc[]) {
               })
           .listen(port, [](auto *listen_socket) {
             if (listen_socket) {
-              std::cout << "Thread " << std::this_thread::get_id()
-                        << " listening on port " << port << std::endl;
             }
           });
   init();

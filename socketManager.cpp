@@ -18,6 +18,7 @@
 #include <sys/uio.h>
 #include <thread>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 std::map<uint32_t, SocketReference> socketManager;
@@ -102,44 +103,50 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   watch.detach();
 }
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
-  std::map<uint32_t, SocketReference> copy = socketManager;
-  for (auto id : copy) {
+  socketGaurd.lock();
+  std::pair<uint32_t, SocketReference> copy;
+  for (auto id : socketManager) {
     if (id.first == streamId) {
-      char buffer[READ_SIZE];
-      ssize_t size;
-      if (id.second.type == TCP_TYPE) {
-        while ((size = recv(id.second.descriptor, buffer, READ_SIZE, 0)) > 0) {
-
-          set_data_packet(buffer, size, id.first, sendCallback, id.second.id);
-        }
-      } else { // udp
-        socklen_t addrSize = sizeof(struct sockaddr);
-        while ((size = recvfrom(id.second.descriptor, buffer, READ_SIZE, 0,
-                                id.second.addr, &addrSize)) > 0) {
-          buffer[size] = '\0';
-          set_data_packet(buffer, size, id.first, sendCallback, id.second.id);
-        }
-      }
-      if (size != 0) {
-        switch (errno) {
-        case ECONNREFUSED:
-          set_exit_packet(sendCallback, id.second.id, streamId, ERROR_REFUSED);
-        default:
-          set_exit_packet(sendCallback, id.second.id, streamId, ERROR_UNKNOWN);
-        }
-      }
-      set_exit_packet(sendCallback, id.second.id, streamId, ERROR_UNKNOWN);
-      return;
+      copy = id;
     }
   }
+  socketGaurd.unlock();
+
+  char buffer[READ_SIZE];
+  ssize_t size;
+  if (copy.second.type == TCP_TYPE) {
+    while ((size = recv(copy.second.descriptor, buffer, READ_SIZE, 0)) > 0) {
+
+      set_data_packet(buffer, size, copy.first, sendCallback, copy.second.id);
+    }
+  } else { // udp
+    socklen_t addrSize = sizeof(struct sockaddr);
+    while ((size = recvfrom(copy.second.descriptor, buffer, READ_SIZE, 0,
+                            copy.second.addr, &addrSize)) > 0) {
+      buffer[size] = '\0';
+      set_data_packet(buffer, size, copy.first, sendCallback, copy.second.id);
+    }
+  }
+  if (size != 0) {
+    switch (errno) {
+    case ECONNREFUSED:
+      set_exit_packet(sendCallback, copy.second.id, streamId, ERROR_REFUSED);
+    default:
+      set_exit_packet(sendCallback, copy.second.id, streamId, ERROR_UNKNOWN);
+    }
+  }
+  set_exit_packet(sendCallback, copy.second.id, streamId, ERROR_UNKNOWN);
+  return;
 }
 
 void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
                      char signal) {
 
+  socketGaurd.lock();
   if (streamId != 0 && socketManager.find(streamId) != socketManager.end()) {
     socketManager.erase(streamId);
   }
+  socketGaurd.unlock();
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
   initPacket->type = EXIT_PACKET;
@@ -172,30 +179,35 @@ void set_data_packet(char *data, size_t size, uint32_t streamId,
 }
 void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                          char *data, size_t length) {
-  for (auto id : socketManager) {
-    if (id.first == streamId) {
-      ssize_t error;
-      if (id.second.type == TCP_TYPE) {
-        error = send(id.second.descriptor, data, length, 0);
-      } else {
-        error = sendto(id.second.descriptor, data, length, 0, id.second.addr,
-                       sizeof(struct sockaddr));
-      }
-      if (error == -1) {
-        switch (errno) {
-        case ECONNRESET:
-          set_exit_packet(sendCallback, id.second.id, streamId,
-                          ERROR_NETWORK_ERROR);
-          break;
-        default:
-          set_exit_packet(sendCallback, id.second.id, streamId, ERROR_UNKNOWN);
-        }
-        return;
-      }
-      if (id.second.type == TCP_TYPE) {
-        set_continue_packet(BUFFER_SIZE, sendCallback, id.second.id, streamId);
-      }
+
+  socketGaurd.lock();
+  std::pair<uint32_t, SocketReference> idData;
+  for (auto copy : socketManager) {
+    if (copy.first == streamId) {
+      idData = copy;
     }
+  }
+  socketGaurd.unlock();
+  ssize_t error;
+  if (idData.second.type == TCP_TYPE) {
+    error = send(idData.second.descriptor, data, length, 0);
+  } else {
+    error = sendto(idData.second.descriptor, data, length, 0,
+                   idData.second.addr, sizeof(struct sockaddr));
+  }
+  if (error == -1) {
+    switch (errno) {
+    case ECONNRESET:
+      set_exit_packet(sendCallback, idData.second.id, streamId,
+                      ERROR_NETWORK_ERROR);
+      break;
+    default:
+      set_exit_packet(sendCallback, idData.second.id, streamId, ERROR_UNKNOWN);
+    }
+    return;
+  }
+  if (idData.second.type == TCP_TYPE) {
+    set_continue_packet(BUFFER_SIZE, sendCallback, idData.second.id, streamId);
   }
 }
 
