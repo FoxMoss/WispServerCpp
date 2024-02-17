@@ -53,17 +53,17 @@ void init() {
           uWS::WebSocket<SSL, true, PerSocketData> *ws =
               (uWS::WebSocket<SSL, true, PerSocketData> *)nextMessage->id;
 
-          std::string_view message((char *)nextMessage->buffer,
-                                   nextMessage->size);
-          if (ws != NULL) {
-            ws->send(message, uWS::OpCode::BINARY);
-
-            if (nextMessage->exit) {
-              ws->close();
-            }
-          }
-
           if (freeChecker.find(nextMessage->buffer) == freeChecker.end()) {
+            std::string_view message((char *)nextMessage->buffer,
+                                     nextMessage->size);
+            if (ws != NULL) {
+              ws->send(message, uWS::OpCode::BINARY);
+
+              if (nextMessage->exit) {
+                ws->close();
+              }
+            }
+
             freeChecker[nextMessage->buffer] = true;
             free(nextMessage->buffer);
           }
