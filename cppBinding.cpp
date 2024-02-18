@@ -24,11 +24,12 @@ struct Message {
   bool exit = false;
 };
 std::vector<Message> messageStack;
-std::vector<Message> offStack;
 std::mutex messageLock;
 
 void send_callback(void *buffer, size_t size, void *id, bool exit = false) {
+  messageLock.lock();
   messageStack.push_back({buffer, size, id, exit});
+  messageLock.unlock();
 }
 void on_open(uWS::WebSocket<SSL, true, PerSocketData> *ws) {
   open_interface(send_callback, ws);
@@ -68,7 +69,6 @@ void init() {
             free(nextMessage->buffer);
           }
 
-          offStack.push_back(*messageStack.begin().base());
           messageStack.erase(messageStack.begin());
         }
         messageLock.unlock();
