@@ -21,7 +21,7 @@
 #include <utility>
 #include <vector>
 
-std::map<uint32_t, SocketReference> socketManager;
+std::vector<SocketReference> socketManager;
 std::mutex socketGaurd;
 
 void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
@@ -31,9 +31,6 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   reference.streamId = streamId;
   reference.id = id;
   reference.type = payload->type;
-
-  std::cout << "Connection for: " << payload->hostname << " on id " << streamId
-            << "\n";
 
   int type = SOCK_STREAM;
   if (payload->type == 0x02) {
@@ -51,6 +48,7 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
       sizeof(struct sockaddr_in) + sizeof(struct sockaddr_in6));
 
   if (dns == NULL) { // IP addr
+    printf("hey\n");
     struct sockaddr_in *address = (struct sockaddr_in *)addrOut;
 
     address->sin_family = AF_INET;
@@ -76,7 +74,7 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
       address->sin6_addr = *((struct in6_addr *)(dns->h_addr_list[0]));
     }
   }
-  if (payload->type == TCP_TYPE && // udp doesnt connect
+  if (payload->type == TCP_TYPE && // udp doesnt use connect
       connect(reference.descriptor, addrOut, sizeof(struct sockaddr)) < 0) {
     switch (errno) {
     case ETIMEDOUT:
@@ -96,64 +94,79 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   reference.addr = addrOut;
 
   socketGaurd.lock();
-  socketManager[streamId] = reference;
+  socketManager.push_back(reference);
+  std::cout << "Connection for: " << payload->hostname << ":" << payload->port
+            << " on id " << id << " : " << streamId << "\n";
   socketGaurd.unlock();
 
-  std::thread watch(watch_thread, streamId, sendCallback);
+  std::thread watch(watch_thread, streamId, sendCallback, id);
   watch.detach();
 }
-void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE) {
+void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
+  SocketReference copy;
+  bool found = false;
   socketGaurd.lock();
-  std::pair<uint32_t, SocketReference> copy;
-  for (auto id : socketManager) {
-    if (id.first == streamId) {
-      copy = id;
+  for (auto find : socketManager) {
+    if (find.streamId == streamId && find.id == id) {
+      found = true;
+      copy = find;
     }
   }
   socketGaurd.unlock();
 
+  if (!found) {
+    std::cout << "Error in creating thread\n";
+    return;
+  }
+
   char buffer[READ_SIZE];
   ssize_t size;
-  if (copy.second.type == TCP_TYPE) {
-    while ((size = recv(copy.second.descriptor, buffer, READ_SIZE, 0)) > 0) {
+  if (copy.type == TCP_TYPE) {
+    while ((size = recv(copy.descriptor, buffer, READ_SIZE, 0)) > 0) {
 
-      set_data_packet(buffer, size, copy.first, sendCallback, copy.second.id);
+      set_data_packet(buffer, size, copy.streamId, sendCallback, copy.id);
     }
   } else { // udp
     socklen_t addrSize = sizeof(struct sockaddr);
-    while ((size = recvfrom(copy.second.descriptor, buffer, READ_SIZE, 0,
-                            copy.second.addr, &addrSize)) > 0) {
+    while ((size = recvfrom(copy.descriptor, buffer, READ_SIZE, 0, copy.addr,
+                            &addrSize)) > 0) {
       buffer[size] = '\0';
-      set_data_packet(buffer, size, copy.first, sendCallback, copy.second.id);
+      set_data_packet(buffer, size, copy.streamId, sendCallback, copy.id);
     }
   }
   if (size != 0) {
     switch (errno) {
     case ECONNREFUSED:
-      set_exit_packet(sendCallback, copy.second.id, streamId, ERROR_REFUSED);
+      set_exit_packet(sendCallback, copy.id, streamId, ERROR_REFUSED);
     default:
-      set_exit_packet(sendCallback, copy.second.id, streamId, ERROR_UNKNOWN);
+      set_exit_packet(sendCallback, copy.id, streamId, ERROR_UNKNOWN);
     }
   }
-  set_exit_packet(sendCallback, copy.second.id, streamId, ERROR_UNKNOWN);
+  set_exit_packet(sendCallback, copy.id, streamId, ERROR_UNKNOWN);
   return;
 }
 
 void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
                      char signal) {
 
-  socketGaurd.lock();
-  if (streamId != 0 && socketManager.find(streamId) != socketManager.end()) {
-    socketManager.erase(streamId);
-  }
-  socketGaurd.unlock();
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
   initPacket->type = EXIT_PACKET;
   *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
   *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
 
+  std::cout << "Exited on id " << id << " : " << streamId << "\n";
+
   sendCallback(initPacket, initSize - 3, id, false);
+
+  socketGaurd.lock();
+  for (auto find = socketManager.begin();
+       find != socketManager.end() && socketManager.size() != 0; find++) {
+    if (find->streamId == streamId && find->id == id) {
+      socketManager.erase(find);
+    }
+  }
+  socketGaurd.unlock();
 }
 void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
                          uint32_t streamId) {
@@ -180,43 +193,49 @@ void set_data_packet(char *data, size_t size, uint32_t streamId,
 void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                          char *data, size_t length) {
 
-  socketGaurd.lock();
-  std::pair<uint32_t, SocketReference> idData;
+  bool found = false;
+  SocketReference idData;
   for (auto copy : socketManager) {
-    if (copy.first == streamId) {
+    if (copy.streamId == streamId && copy.id == id) {
+      found = true;
       idData = copy;
     }
   }
   socketGaurd.unlock();
+  if (!found) {
+    std::cout << "Matching socket not found. " << id << " : " << streamId
+              << "\n";
+    return;
+  }
+
   ssize_t error;
-  if (idData.second.type == TCP_TYPE) {
-    error = send(idData.second.descriptor, data, length, 0);
+  if (idData.type == TCP_TYPE) {
+    error = send(idData.descriptor, data, length, 0);
   } else {
-    error = sendto(idData.second.descriptor, data, length, 0,
-                   idData.second.addr, sizeof(struct sockaddr));
+    error = sendto(idData.descriptor, data, length, 0, idData.addr,
+                   sizeof(struct sockaddr));
   }
   if (error == -1) {
     switch (errno) {
     case ECONNRESET:
-      set_exit_packet(sendCallback, idData.second.id, streamId,
-                      ERROR_NETWORK_ERROR);
+      set_exit_packet(sendCallback, idData.id, streamId, ERROR_NETWORK_ERROR);
       break;
     default:
-      set_exit_packet(sendCallback, idData.second.id, streamId, ERROR_UNKNOWN);
+      set_exit_packet(sendCallback, idData.id, streamId, ERROR_UNKNOWN);
     }
     return;
   }
-  if (idData.second.type == TCP_TYPE) {
-    set_continue_packet(BUFFER_SIZE, sendCallback, idData.second.id, streamId);
+  if (idData.type == TCP_TYPE) {
+    set_continue_packet(BUFFER_SIZE, sendCallback, idData.id, streamId);
   }
 }
 
 void close_sockets(void *id) {
   socketGaurd.lock();
+  std::cout << "Closed sockets on id: " << id;
   for (auto sock = socketManager.begin(); sock != socketManager.end(); sock++) {
-    if (sock->second.id == id) {
-      std::cout << "Closed socket with id: " << sock->second.streamId;
-      close(sock->second.descriptor);
+    if (sock->id == id) {
+      close(sock->descriptor);
       socketManager.erase(sock);
     }
   }

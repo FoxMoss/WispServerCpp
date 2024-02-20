@@ -60,5 +60,5 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                          char *data, size_t length);
 void set_data_packet(char *data, size_t size, uint32_t streamId,
                      SEND_CALLBACK_TYPE, void *id);
-void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE);
+void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id);
 void close_sockets(void *id);
