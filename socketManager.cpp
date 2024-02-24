@@ -155,14 +155,14 @@ void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
   *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
   *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
 
+  socketGaurd.lock();
   std::cout << "Exited on id " << id << " : " << streamId << "\n";
 
   sendCallback(initPacket, initSize - 3, id, false);
 
-  socketGaurd.lock();
   for (auto find = socketManager.begin();
        find != socketManager.end() && socketManager.size() != 0; find++) {
-    if (find->streamId == streamId && find->id == id) {
+    if (find.base()->streamId == streamId && find.base()->id == id) {
       socketManager.erase(find);
     }
   }
@@ -178,7 +178,9 @@ void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
   *(uint32_t *)(&continuePacket->payload) = bufferRemaining;
   *(uint32_t *)(&continuePacket->type + sizeof(uint8_t)) = streamId;
 
+  socketGaurd.lock();
   sendCallback(continuePacket, continueSize, id, false);
+  socketGaurd.unlock();
 }
 void set_data_packet(char *data, size_t size, uint32_t streamId,
                      SEND_CALLBACK_TYPE, void *id) {
@@ -188,13 +190,16 @@ void set_data_packet(char *data, size_t size, uint32_t streamId,
   memcpy((char *)&dataPacket->payload - 3, data, size);
   *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;
 
+  socketGaurd.lock();
   sendCallback(dataPacket, dataSize, id, false);
+  socketGaurd.unlock();
 }
 void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                          char *data, size_t length) {
 
   bool found = false;
   SocketReference idData;
+  socketGaurd.lock();
   for (auto copy : socketManager) {
     if (copy.streamId == streamId && copy.id == id) {
       found = true;
