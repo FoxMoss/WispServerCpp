@@ -11,7 +11,6 @@
 #include <string>
 #include <sys/types.h>
 #include <vector>
-#include <websocketpp/close.hpp>
 
 void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
