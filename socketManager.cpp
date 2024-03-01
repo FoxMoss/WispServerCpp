@@ -44,11 +44,11 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   }
 
   struct hostent *dns = gethostbyname(payload->hostname);
+
   struct sockaddr *addrOut = (struct sockaddr *)malloc(
       sizeof(struct sockaddr_in) + sizeof(struct sockaddr_in6));
 
   if (dns == NULL) { // IP addr
-    printf("hey\n");
     struct sockaddr_in *address = (struct sockaddr_in *)addrOut;
 
     address->sin_family = AF_INET;
@@ -238,10 +238,11 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
 void close_sockets(void *id) {
   socketGaurd.lock();
   std::cout << "Closed sockets on id: " << id;
-  for (auto sock = socketManager.begin(); sock != socketManager.end(); sock++) {
-    if (sock->id == id) {
-      close(sock->descriptor);
-      socketManager.erase(sock);
+  // iterators caused issues tf???
+  for (auto sock = 0; sock < socketManager.size(); sock++) {
+    if (socketManager[sock].id == id) {
+      close(socketManager[sock].descriptor);
+      socketManager.erase(socketManager.begin() + sock);
     }
   }
   socketGaurd.unlock();

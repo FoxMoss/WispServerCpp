@@ -19,25 +19,24 @@ int main(int argv, char *argc[]) {
 
   std::vector<std::thread *> threads(std::thread::hardware_concurrency());
 
-  auto app =
-      uWS::App()
-          .ws<PerSocketData>(
-              "*",
-              {
-                  .upgrade =
-                      [](auto *res, auto *req, auto *context) {
-                        res->template upgrade<PerSocketData>(
-                            {}, req->getHeader("sec-websocket-key"), "wisp-v1",
-                            req->getHeader("sec-websocket-extensions"),
-                            context);
-                      },
-                  .open = on_open,
-                  .message = on_message,
-              })
-          .listen(port, [](auto *listen_socket) {
-            if (listen_socket) {
-            }
-          });
+  auto app = uWS::App()
+                 .ws<PerSocketData>(
+                     "*",
+                     {
+                         .upgrade =
+                             [](auto *res, auto *req, auto *context) {
+                               res->template upgrade<PerSocketData>(
+                                   {}, req->getHeader("sec-websocket-key"), "",
+                                   req->getHeader("sec-websocket-extensions"),
+                                   context);
+                             },
+                         .open = on_open,
+                         .message = on_message,
+                     })
+                 .listen(port, [](auto *listen_socket) {
+                   if (listen_socket) {
+                   }
+                 });
   init();
 
   app.run();
