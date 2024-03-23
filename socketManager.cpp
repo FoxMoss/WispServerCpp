@@ -101,6 +101,7 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
 
   std::thread watch(watch_thread, streamId, sendCallback, id);
   watch.detach();
+  // watch_thread(streamId, sendCallback, id);
 }
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
   SocketReference copy;
@@ -150,7 +151,7 @@ void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
                      char signal) {
 
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-  struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
+  struct WispPacket *initPacket = (struct WispPacket *)calloc(1, initSize);
   initPacket->type = EXIT_PACKET;
   *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
   *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
@@ -163,6 +164,7 @@ void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
   for (auto find = socketManager.begin();
        find != socketManager.end() && socketManager.size() != 0; find++) {
     if (find.base()->streamId == streamId && find.base()->id == id) {
+      free(find.base()->addr);
       socketManager.erase(find);
     }
   }
@@ -173,7 +175,7 @@ void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
 
   size_t continueSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   struct WispPacket *continuePacket =
-      (struct WispPacket *)std::calloc(1, continueSize);
+      (struct WispPacket *)calloc(1, continueSize);
   continuePacket->type = CONTINUE_PACKET;
   *(uint32_t *)(&continuePacket->payload) = bufferRemaining;
   *(uint32_t *)(&continuePacket->type + sizeof(uint8_t)) = streamId;
@@ -185,7 +187,7 @@ void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
 void set_data_packet(char *data, size_t size, uint32_t streamId,
                      SEND_CALLBACK_TYPE, void *id) {
   size_t dataSize = PACKET_SIZE(size);
-  struct WispPacket *dataPacket = (struct WispPacket *)std::calloc(1, dataSize);
+  struct WispPacket *dataPacket = (struct WispPacket *)calloc(1, dataSize);
   dataPacket->type = DATA_PACKET;
   memcpy((char *)&dataPacket->payload - 3, data, size);
   *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;

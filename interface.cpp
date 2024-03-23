@@ -10,17 +10,16 @@
 #include <iostream>
 #include <string>
 #include <sys/types.h>
+#include <thread>
 #include <vector>
 
 void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
   size_t payloadLength =
-      (size_t)msg.length() - sizeof(uint8_t) - sizeof(uint32_t);
-  struct WispPacket *recvPacket =
-      (struct WispPacket *)malloc((size_t)msg.length() + 1);
-  void *payloadRaw = malloc(payloadLength + 1);
+      (size_t)msg.size() - sizeof(uint8_t) - sizeof(uint32_t);
+  struct WispPacket *recvPacket = (struct WispPacket *)calloc(
+      1, sizeof(char) * (msg.size() + 1) + sizeof(WispPacket));
 
-  // try {
   const char *data = msg.c_str();
 
   recvPacket->type = *(uint8_t *)data;
@@ -31,27 +30,36 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
   switch (recvPacket->type) {
   case 0x01: // Connect
   {
-    struct ConnectPayload *payload = (struct ConnectPayload *)payloadRaw;
+    struct ConnectPayload *payload =
+        (struct ConnectPayload *)malloc(payloadLength + sizeof(ConnectPayload));
     payload->type = *(uint8_t *)(&recvPacket->payload);
 
     payload->port =
         *(uint16_t *)((char *)&recvPacket->payload + sizeof(uint8_t));
 
+    if (payloadLength - sizeof(uint8_t) + sizeof(uint16_t) == 1) {
+      exit(69);
+    }
     memcpy(&payload->hostname,
            (char *)((char *)&recvPacket->payload + sizeof(uint8_t) +
                     sizeof(uint16_t)),
-           payloadLength - sizeof(uint8_t) + sizeof(uint16_t));
+           payloadLength - sizeof(uint8_t) - sizeof(uint16_t));
 
     payload->hostname[payloadLength - 3] = 0;
 
     open_socket(payload, recvPacket->streamId, sendCallback, id);
 
+    free(payload);
   } break;
   case 0x02: {
-    char *payload = (char *)payloadRaw;
-    memcpy(payload, (char *)((char *)&recvPacket->payload), payloadLength);
-    forward_data_packet(recvPacket->streamId, sendCallback, id, payload,
-                        payloadLength);
+    char *payloadRaw = (char *)malloc(payloadLength + 1);
+
+    memcpy(payloadRaw, (char *)(&recvPacket->payload), payloadLength);
+
+    forward_data_packet(recvPacket->streamId, sendCallback, id,
+                        (char *)payloadRaw, payloadLength);
+    free(payloadRaw);
+
   } break;
 
   case 0x04: // ?? i think im supposed to do error handling here
@@ -67,7 +75,7 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
 void open_interface(SEND_CALLBACK_TYPE, void *id) {
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-  struct WispPacket *initPacket = (struct WispPacket *)std::calloc(1, initSize);
+  struct WispPacket *initPacket = (struct WispPacket *)calloc(1, initSize);
   initPacket->type = CONTINUE_PACKET;
   *(uint32_t *)((char *)&initPacket->payload - 3) = 0x80;
 
