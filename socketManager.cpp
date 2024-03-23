@@ -107,10 +107,12 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
   SocketReference copy;
   bool found = false;
   socketGaurd.lock();
-  for (auto find : socketManager) {
-    if (find.streamId == streamId && find.id == id) {
+  for (auto find = socketManager.begin();
+       find != socketManager.end() && socketManager.size() != 0; find++) {
+    if (find->streamId == streamId && find->id == id) {
       found = true;
-      copy = find;
+      copy = *find.base();
+      break;
     }
   }
   socketGaurd.unlock();
@@ -135,15 +137,29 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
       set_data_packet(buffer, size, copy.streamId, sendCallback, copy.id);
     }
   }
-  if (size != 0) {
+  if (size == 0) {
     switch (errno) {
     case ECONNREFUSED:
       set_exit_packet(sendCallback, copy.id, streamId, ERROR_REFUSED);
     default:
       set_exit_packet(sendCallback, copy.id, streamId, ERROR_UNKNOWN);
     }
+  } else {
+    set_exit_packet(sendCallback, copy.id, streamId, ERROR_UNKNOWN);
   }
-  set_exit_packet(sendCallback, copy.id, streamId, ERROR_UNKNOWN);
+  socketGaurd.lock();
+  free(copy.addr);
+  std::vector<SocketReference>::iterator itCopy;
+
+  for (auto find = socketManager.begin();
+       find != socketManager.end() && socketManager.size() != 0; find++) {
+    if (find->streamId == streamId && find->id == id) {
+      socketManager.erase(find);
+      break;
+    }
+  }
+  socketGaurd.unlock();
+
   return;
 }
 
@@ -156,19 +172,9 @@ void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
   *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
   *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
 
-  socketGaurd.lock();
   std::cout << "Exited on id " << id << " : " << streamId << "\n";
 
   sendCallback(initPacket, initSize - 3, id, false);
-
-  for (auto find = socketManager.begin();
-       find != socketManager.end() && socketManager.size() != 0; find++) {
-    if (find.base()->streamId == streamId && find.base()->id == id) {
-      free(find.base()->addr);
-      socketManager.erase(find);
-    }
-  }
-  socketGaurd.unlock();
 }
 void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
                          uint32_t streamId) {
