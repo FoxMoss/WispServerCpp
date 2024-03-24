@@ -23,6 +23,7 @@ int main(int argv, char *argc[]) {
                  .ws<PerSocketData>(
                      "*",
                      {
+                         .maxPayloadLength = 100 * 1024,
                          .upgrade =
                              [](auto *res, auto *req, auto *context) {
                                res->template upgrade<PerSocketData>(

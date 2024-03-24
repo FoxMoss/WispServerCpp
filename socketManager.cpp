@@ -180,11 +180,11 @@ void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
                          uint32_t streamId) {
 
   size_t continueSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-  struct WispPacket *continuePacket =
-      (struct WispPacket *)calloc(1, continueSize);
-  continuePacket->type = CONTINUE_PACKET;
-  *(uint32_t *)(&continuePacket->payload) = bufferRemaining;
-  *(uint32_t *)(&continuePacket->type + sizeof(uint8_t)) = streamId;
+  void *continuePacket = (void *)calloc(1, continueSize);
+  *(uint8_t *)continuePacket = CONTINUE_PACKET;
+  *(uint32_t *)((char *)continuePacket + sizeof(uint8_t) + sizeof(uint32_t)) =
+      bufferRemaining;
+  *(uint32_t *)((char *)continuePacket + sizeof(uint8_t)) = streamId;
 
   socketGaurd.lock();
   sendCallback(continuePacket, continueSize, id, false);

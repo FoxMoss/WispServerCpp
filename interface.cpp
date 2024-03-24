@@ -38,7 +38,7 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
         *(uint16_t *)((char *)&recvPacket->payload + sizeof(uint8_t));
 
     if (payloadLength - sizeof(uint8_t) + sizeof(uint16_t) == 1) {
-      exit(69);
+      return;
     }
     memcpy(&payload->hostname,
            (char *)((char *)&recvPacket->payload + sizeof(uint8_t) +
