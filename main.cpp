@@ -19,26 +19,35 @@ int main(int argv, char *argc[]) {
 
   std::vector<std::thread *> threads(std::thread::hardware_concurrency());
 
-  auto app = uWS::App()
-                 .ws<PerSocketData>(
-                     "*",
-                     {
-                         .maxPayloadLength = 100 * 1024,
-                         .upgrade =
-                             [](auto *res, auto *req, auto *context) {
-                               res->template upgrade<PerSocketData>(
-                                   {}, req->getHeader("sec-websocket-key"), "",
-                                   req->getHeader("sec-websocket-extensions"),
-                                   context);
-                             },
-                         .open = on_open,
-                         .message = on_message,
-                     })
-                 .listen(port, [](auto *listen_socket) {
-                   if (listen_socket) {
-                   }
-                 });
-  init();
+  std::transform(
+      threads.begin(), threads.end(), threads.begin(), [](std::thread * /*t*/) {
+        return new std::thread([]() {
+          uWS::TemplatedApp<false> app =
+              uWS::App()
+                  .ws<PerSocketData>(
+                      "*",
+                      {
+                          .maxPayloadLength = 100 * 1024,
+                          .upgrade =
+                              [](auto *res, auto *req, auto *context) {
+                                res->template upgrade<PerSocketData>(
+                                    {}, req->getHeader("sec-websocket-key"), "",
+                                    req->getHeader("sec-websocket-extensions"),
+                                    context);
+                              },
+                          .open = [&app](
+                                      uWS::WebSocket<SSL, true, PerSocketData>
+                                          *ws) { on_open(&app, ws); },
+                          .message = on_message,
+                      })
+                  .listen(port, [](auto *listen_socket) {
+                    if (listen_socket) {
+                    }
+                  });
+          app.run();
+        });
+      });
 
-  app.run();
+  std::for_each(threads.begin(), threads.end(),
+                [](std::thread *t) { t->join(); });
 }

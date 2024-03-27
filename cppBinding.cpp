@@ -28,18 +28,11 @@ struct Message {
 std::vector<Message> messageStack;
 std::mutex messageLock;
 
-uWS::Loop *mainLoop;
-
 void send_callback(void *buffer, size_t size, void *id, bool exit = false) {
-  // void *copyBuffer = malloc(size);
-  // memcpy(copyBuffer, buffer, size);
-  //
-  // messageStack.push_back({copyBuffer, size, id, exit});
+  uWS::WebSocket<SSL, true, PerSocketData> *ws =
+      (uWS::WebSocket<SSL, true, PerSocketData> *)id;
 
-  mainLoop->defer([=]() {
-    uWS::WebSocket<SSL, true, PerSocketData> *ws =
-        (uWS::WebSocket<SSL, true, PerSocketData> *)id;
-
+  ws->getUserData()->loop->defer([=]() {
     std::string_view message((char *)buffer, size);
     if (ws != NULL) {
       ws->send(message, uWS::OpCode::BINARY);
@@ -51,13 +44,12 @@ void send_callback(void *buffer, size_t size, void *id, bool exit = false) {
     free(buffer);
   });
 }
-void on_open(uWS::WebSocket<SSL, true, PerSocketData> *ws) {
+void on_open(uWS::TemplatedApp<false> *app,
+             uWS::WebSocket<SSL, true, PerSocketData> *ws) {
+  ws->getUserData()->loop = app->getLoop();
   std::thread(open_interface, send_callback, ws).detach();
 }
 void on_message(uWS::WebSocket<SSL, true, PerSocketData> *ws,
                 std::string_view message, uWS::OpCode opCode) {
   message_interface(send_callback, std::string(message), ws);
-  // std::thread(message_interface, send_callback, std::string(message), ws)
-  //     .detach();
 }
-void init() { mainLoop = uWS::Loop::get(); }

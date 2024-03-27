@@ -192,11 +192,13 @@ void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
 }
 void set_data_packet(char *data, size_t size, uint32_t streamId,
                      SEND_CALLBACK_TYPE, void *id) {
+  half a;
+
   size_t dataSize = PACKET_SIZE(size);
-  struct WispPacket *dataPacket = (struct WispPacket *)calloc(1, dataSize);
-  dataPacket->type = DATA_PACKET;
-  memcpy((char *)&dataPacket->payload - 3, data, size);
-  *(uint32_t *)(&dataPacket->type + sizeof(uint8_t)) = streamId;
+  void *dataPacket = calloc(1, dataSize);
+  *(uint8_t *)dataPacket = DATA_PACKET;
+  memcpy((char *)dataPacket + sizeof(uint8_t) + sizeof(uint32_t), data, size);
+  *(uint32_t *)((char *)dataPacket + sizeof(uint8_t)) = streamId;
 
   socketGaurd.lock();
   sendCallback(dataPacket, dataSize, id, false);
@@ -246,6 +248,7 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
 void close_sockets(void *id) {
   socketGaurd.lock();
   std::cout << "Closed sockets on id: " << id;
+
   // iterators caused issues tf???
   for (auto sock = 0; sock < socketManager.size(); sock++) {
     if (socketManager[sock].id == id) {

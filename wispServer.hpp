@@ -38,8 +38,8 @@ inline std::map<void *, bool> TBF;
 
 #endif // DEBUG
 //
-#define BUFFER_SIZE 51 * 1024
-#define READ_SIZE 51 * 1024
+#define BUFFER_SIZE 1024
+#define READ_SIZE 1024
 
 #define TCP_TYPE 0x01
 #define UDP_TYPE 0x02
