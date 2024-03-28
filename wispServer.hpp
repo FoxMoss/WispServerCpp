@@ -10,34 +10,31 @@
 #include <vector>
 
 #ifdef DEBUG
-
-inline std::map<void *, bool> TBF;
-
-#define malloc(arg1)                                                           \
-  [=]() -> void * {                                                            \
-    void *ptr = malloc(arg1);                                                  \
-    printf("malloc %p thread %lu size %lu\n", ptr, pthread_self(), arg1);      \
-    TBF[ptr] = true;                                                           \
-    return ptr;                                                                \
-  }()
-
-#define calloc(a, arg1)                                                        \
-  [=]() -> void * {                                                            \
-    void *ptr = calloc(a, arg1);                                               \
-    printf("malloc %p thread %lu size %lu\n", ptr, pthread_self(), arg1);      \
-    TBF[ptr] = true;                                                           \
-    return ptr;                                                                \
-  }()
-
-#define free(ptr)                                                              \
-  printf("free %p thread %lu first byte %i\n", ptr, pthread_self(),            \
-         ((char *)ptr)[0]);                                                    \
-  TBF.erase(nullptr);                                                          \
-  printf("wasting away %p\n", TBF.end()->first);                               \
-  free(ptr);
-
-#endif // DEBUG
+// inline std::map<void *, bool> TBF;
 //
+// #define malloc(arg1) \
+//   [=]() -> void * { \
+//     void *ptr = malloc(arg1); \
+//     printf("malloc %p thread %lu size %lu\n", ptr, pthread_self(), arg1); \
+//     TBF[ptr] = true; \
+//     return ptr; \
+//   }()
+//
+// #define calloc(a, arg1) \
+//   [=]() -> void * { \
+//     void *ptr = calloc(a, arg1); \
+//     printf("malloc %p thread %lu size %lu\n", ptr, pthread_self(), arg1); \
+//     TBF[ptr] = true; \
+//     return ptr; \
+//   }()
+//
+// #define free(ptr) \
+//   printf("free %p thread %lu first byte %i\n", ptr, pthread_self(), \
+//          ((char *)ptr)[0]); \
+//   TBF.erase(nullptr); \
+//   printf("wasting away %p\n", TBF.end()->first); \ free(ptr);
+#endif // DEBUG
+
 #define BUFFER_SIZE 1024
 #define READ_SIZE 1024
 
@@ -56,10 +53,6 @@ inline std::map<void *, bool> TBF;
 #define ERROR_THROTTLED 0x49
 #define ERROR_CLIENT 0x89
 
-#define CONNECT_PACKET 0x01
-#define DATA_PACKET 0x02
-#define CONTINUE_PACKET 0x03
-#define EXIT_PACKET 0x04
 #define PACKET_SIZE(payload_size)                                              \
   sizeof(uint8_t) + sizeof(uint32_t) + (sizeof(char) * (payload_size))
 

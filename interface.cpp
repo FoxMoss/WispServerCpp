@@ -1,5 +1,6 @@
 #include "interface.hpp"
 #include "wispServer.hpp"
+#include "wispValidation.hpp"
 #include <bits/types/error_t.h>
 #include <cstddef>
 #include <cstdint>
@@ -22,13 +23,20 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
   const char *data = msg.c_str();
 
+  if (validatePacket((char *)data, (size_t)msg.length()) == WISP_NULL) {
+#ifdef DEBUG
+    std::cout << "Bad packet from client\n";
+#endif // DEBUG
+    return;
+  }
+
   recvPacket->type = *(uint8_t *)data;
   recvPacket->streamId = *(uint32_t *)(data + sizeof(uint8_t));
   memcpy(&recvPacket->payload, data + sizeof(uint8_t) + sizeof(uint32_t),
          payloadLength);
 
   switch (recvPacket->type) {
-  case 0x01: // Connect
+  case WISP_CONNECT: // Connect
   {
     struct ConnectPayload *payload =
         (struct ConnectPayload *)malloc(payloadLength + sizeof(ConnectPayload));
@@ -36,10 +44,6 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
     payload->port =
         *(uint16_t *)((char *)&recvPacket->payload + sizeof(uint8_t));
-
-    if (payloadLength - sizeof(uint8_t) + sizeof(uint16_t) == 1) {
-      return;
-    }
     memcpy(&payload->hostname,
            (char *)((char *)&recvPacket->payload + sizeof(uint8_t) +
                     sizeof(uint16_t)),
@@ -51,7 +55,7 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
     free(payload);
   } break;
-  case 0x02: {
+  case WISP_DATA: {
     char *payloadRaw = (char *)malloc(payloadLength + 1);
 
     memcpy(payloadRaw, (char *)(&recvPacket->payload), payloadLength);
@@ -62,12 +66,11 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
   } break;
 
-  case 0x04: // ?? i think im supposed to do error handling here
-  {
+  case WISP_CLOSE:
+  default: {
     set_exit_packet(sendCallback, id, recvPacket->streamId);
-  } break;
-  default:
     break;
+  }
   }
 
   free(recvPacket);
@@ -76,7 +79,7 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 void open_interface(SEND_CALLBACK_TYPE, void *id) {
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   struct WispPacket *initPacket = (struct WispPacket *)calloc(1, initSize);
-  initPacket->type = CONTINUE_PACKET;
+  initPacket->type = WISP_CONTINUE;
   *(uint32_t *)((char *)&initPacket->payload - 3) = 0x80;
 
   (sendCallback)(initPacket, initSize, id, false);

@@ -1,6 +1,7 @@
 #include "cppBinding.hpp"
 #include "interface.hpp"
 #include "wispServer.hpp"
+#include "wispValidation.hpp"
 #include <bits/types/error_t.h>
 #include <cstddef>
 #include <cstdint>
@@ -19,18 +20,15 @@
 #include <uWebSockets/WebSocketProtocol.h>
 #include <vector>
 
-struct Message {
-  void *buffer;
-  size_t size;
-  void *id;
-  bool exit = false;
-};
-std::vector<Message> messageStack;
-std::mutex messageLock;
-
 void send_callback(void *buffer, size_t size, void *id, bool exit = false) {
   uWS::WebSocket<SSL, true, PerSocketData> *ws =
       (uWS::WebSocket<SSL, true, PerSocketData> *)id;
+
+#ifdef DEBUG
+  if (validatePacket((char *)buffer, (size_t)size) == WISP_NULL) {
+    std::cout << "Bad packet from server\n";
+  }
+#endif // DEBUG
 
   ws->getUserData()->loop->defer([=]() {
     std::string_view message((char *)buffer, size);

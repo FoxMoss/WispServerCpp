@@ -1,4 +1,5 @@
 #include "wispServer.hpp"
+#include "wispValidation.hpp"
 #include <arpa/inet.h>
 #include <asm-generic/errno.h>
 #include <byteswap.h>
@@ -95,8 +96,10 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
 
   socketGaurd.lock();
   socketManager.push_back(reference);
+#ifdef DEBUG
   std::cout << "Connection for: " << payload->hostname << ":" << payload->port
             << " on id " << id << " : " << streamId << "\n";
+#endif // DEBUG
   socketGaurd.unlock();
 
   std::thread watch(watch_thread, streamId, sendCallback, id);
@@ -118,7 +121,9 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
   socketGaurd.unlock();
 
   if (!found) {
+#ifdef DEBUG
     std::cout << "Error in creating thread\n";
+#endif // DEBUG
     return;
   }
 
@@ -167,12 +172,16 @@ void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
                      char signal) {
 
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
-  struct WispPacket *initPacket = (struct WispPacket *)calloc(1, initSize);
-  initPacket->type = EXIT_PACKET;
-  *(uint8_t *)((char *)&initPacket->payload - 3) = signal;
-  *(uint32_t *)(&initPacket->type + sizeof(uint8_t)) = streamId;
+  void *initPacket = calloc(1, initSize);
+  *(uint8_t *)initPacket = WISP_CLOSE;
+  *(uint8_t *)((char *)initPacket + sizeof(uint8_t) + sizeof(uint32_t)) =
+      signal;
+  *(uint32_t *)((char *)initPacket + sizeof(uint8_t)) = streamId;
 
-  std::cout << "Exited on id " << id << " : " << streamId << "\n";
+#ifdef DEBUG
+  std::cout << "Exited on id " << id << " : " << streamId
+            << " for reason: " << (int)signal << "\n";
+#endif
 
   sendCallback(initPacket, initSize - 3, id, false);
 }
@@ -181,28 +190,22 @@ void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
 
   size_t continueSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   void *continuePacket = (void *)calloc(1, continueSize);
-  *(uint8_t *)continuePacket = CONTINUE_PACKET;
+  *(uint8_t *)continuePacket = WISP_CONTINUE;
   *(uint32_t *)((char *)continuePacket + sizeof(uint8_t) + sizeof(uint32_t)) =
       bufferRemaining;
   *(uint32_t *)((char *)continuePacket + sizeof(uint8_t)) = streamId;
 
-  socketGaurd.lock();
   sendCallback(continuePacket, continueSize, id, false);
-  socketGaurd.unlock();
 }
 void set_data_packet(char *data, size_t size, uint32_t streamId,
                      SEND_CALLBACK_TYPE, void *id) {
-  half a;
-
   size_t dataSize = PACKET_SIZE(size);
   void *dataPacket = calloc(1, dataSize);
-  *(uint8_t *)dataPacket = DATA_PACKET;
+  *(uint8_t *)dataPacket = WISP_DATA;
   memcpy((char *)dataPacket + sizeof(uint8_t) + sizeof(uint32_t), data, size);
   *(uint32_t *)((char *)dataPacket + sizeof(uint8_t)) = streamId;
 
-  socketGaurd.lock();
   sendCallback(dataPacket, dataSize, id, false);
-  socketGaurd.unlock();
 }
 void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                          char *data, size_t length) {
@@ -218,8 +221,10 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
   }
   socketGaurd.unlock();
   if (!found) {
+#ifdef DEBUG
     std::cout << "Matching socket not found. " << id << " : " << streamId
               << "\n";
+#endif // DEBUG
     return;
   }
 
@@ -247,7 +252,9 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
 
 void close_sockets(void *id) {
   socketGaurd.lock();
+#ifdef DEBUG
   std::cout << "Closed sockets on id: " << id;
+#endif // DEBUG
 
   // iterators caused issues tf???
   for (auto sock = 0; sock < socketManager.size(); sock++) {
