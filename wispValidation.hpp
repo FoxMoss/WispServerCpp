@@ -1,6 +1,9 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
+#include <functional>
+#include <string>
 
 enum WISP_PACKET_TYPE {
   WISP_NULL = 0xff,
@@ -14,3 +17,7 @@ enum WISP_PACKET_TYPE {
   (size_t)(sizeof(uint8_t) + sizeof(uint16_t) + sizeof(char))
 
 WISP_PACKET_TYPE validatePacket(char *buffer, size_t size);
+
+bool checkRatelimits(std::string ip, char *buffer);
+
+inline int maxConnect = -1;
