@@ -1,7 +1,8 @@
 COMPILER = g++
 EXE = wispserver
 LIBS = -lpthread -lusockets -lz
-FlAGS =-Wall -Wno-sign-compare -lstdc++ -std=c++17
+HASH = $(shell git rev-parse HEAD)
+FlAGS =-Wall -Wno-comments -lstdc++ -std=c++17 -DHASH="\"$(HASH)\""
 SOURCES = $(wildcard ./*.cpp) 
 OBJ_DIR = obj
 OBJECTS = $(patsubst ./%.cpp,$(OBJ_DIR)/%.o,$(SOURCES))

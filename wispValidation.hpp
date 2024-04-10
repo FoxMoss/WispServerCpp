@@ -18,6 +18,6 @@ enum WISP_PACKET_TYPE {
 
 WISP_PACKET_TYPE validatePacket(char *buffer, size_t size);
 
-bool checkRatelimits(std::string ip, char *buffer);
+bool checkRatelimits(void *ip);
 
-inline int maxConnect = -1;
+inline int maxForward = -1;

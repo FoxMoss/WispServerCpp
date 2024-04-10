@@ -15,9 +15,15 @@ int port;
 void showHelp(int ret) {
 
   printf("Usage: wispserver [options] <port>\n");
-  printf(" --connect-ratelimit <limit>\t The ammount of connect packets that "
-         "can be sent from a single ip per minute.\n");
-  printf(" --help\t\t\t Shows this help menu.\n");
+  printf(" --packet-ratelimit <limit>\t The ammount of socket packets that "
+         "can be sent from a single websocket per minute.\n");
+  printf(" --help\t\t\t\t Shows this help menu.\n");
+#ifdef DEBUG
+  printf("\nCompiled with the debug flag\n");
+#endif // DEBUG
+#ifdef HASH
+  printf("On commit hash " HASH "\n");
+#endif // HASH
   exit(ret);
 }
 
@@ -35,7 +41,7 @@ bool isValidInt(char *buf) {
 int main(int argv, char *argc[]) {
   int option_index = 0;
   const struct option options[] = {
-      {"connect-ratelimit", required_argument, NULL, 'c'},
+      {"packet-ratelimit", required_argument, NULL, 'c'},
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0}};
   option_index = 0;
@@ -49,7 +55,7 @@ int main(int argv, char *argc[]) {
                argc[0]);
         showHelp(-1);
       }
-      maxConnect = std::stoi(optarg);
+      maxForward = std::stoi(optarg);
       break;
     }
     case 'h':

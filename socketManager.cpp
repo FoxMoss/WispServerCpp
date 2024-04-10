@@ -209,6 +209,10 @@ void set_data_packet(char *data, size_t size, uint32_t streamId,
 }
 void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                          char *data, size_t length) {
+  if (checkRatelimits(id)) {
+    set_exit_packet(sendCallback, id, streamId, ERROR_THROTTLED);
+    return;
+  }
 
   bool found = false;
   SocketReference idData;

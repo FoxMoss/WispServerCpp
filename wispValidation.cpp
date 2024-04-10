@@ -40,33 +40,36 @@ WISP_PACKET_TYPE validatePacket(char *buffer, size_t size) {
   return WISP_NULL;
 }
 
-std::map<std::string, unsigned int> openedConnections;
+std::map<void *, unsigned int> forwardsRequested;
 std::mutex ratelimitLock;
 
 // true == limit
-bool checkRatelimits(std::string ip, char *buffer) {
-  if (maxConnect == -1) {
+bool checkRatelimits(void *ip) {
+  if (maxForward == -1) {
     return false;
   }
-  // ratelimitLock.lock();
-  if (openedConnections.find(ip) == openedConnections.end()) {
-    openedConnections[ip] = 0;
+  ratelimitLock.lock();
+  if (forwardsRequested.find(ip) == forwardsRequested.end()) {
+    forwardsRequested[ip] = 0;
   }
-  if (buffer[0] != WISP_CONNECT) {
-    return openedConnections[ip] > maxConnect;
-  }
-  openedConnections[ip]++;
+  forwardsRequested[ip]++;
+#ifdef DEBUG
+  printf("This minute on %p now at %i forwards\n", ip, forwardsRequested[ip]);
+#endif // DEBUG
 
   std::thread([ip]() {
     std::this_thread::sleep_for(60s);
-    // ratelimitLock.lock();
-    openedConnections[ip]--;
-    if (openedConnections[ip] <= 0) {
-      openedConnections.erase(ip);
+    ratelimitLock.lock();
+    forwardsRequested[ip]--;
+#ifdef DEBUG
+    printf("This minute on %p now at %i forwards\n", ip, forwardsRequested[ip]);
+#endif // DEBUG
+    if (forwardsRequested[ip] <= 0) {
+      forwardsRequested.erase(ip);
     }
-    // ratelimitLock.unlock();
+    ratelimitLock.unlock();
   }).detach();
 
-  // ratelimitLock.unlock();
-  return openedConnections[ip] > maxConnect;
+  ratelimitLock.unlock();
+  return forwardsRequested[ip] > maxForward;
 }

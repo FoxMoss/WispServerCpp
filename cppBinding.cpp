@@ -49,10 +49,5 @@ void on_open(uWS::TemplatedApp<false> *app,
 }
 void on_message(uWS::WebSocket<SSL, true, PerSocketData> *ws,
                 std::string_view message, uWS::OpCode opCode) {
-  if (checkRatelimits(std::string(ws->getRemoteAddressAsText()),
-                      (char *)message.data())) {
-    ws->close();
-    return;
-  }
   message_interface(send_callback, std::string(message), ws);
 }
