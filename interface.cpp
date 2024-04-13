@@ -75,7 +75,13 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
   case WISP_INFO: {
     if (matchCompatability >= 2) {
-      printf("Not implemented\n");
+      char *payloadRaw = (char *)malloc(payloadLength + 1);
+
+      memcpy(payloadRaw, (char *)(&recvPacket->payload), payloadLength);
+
+      parse_info_packet(recvPacket->streamId, sendCallback, id, payloadRaw,
+                        payloadLength);
+      free(payloadRaw);
     } else {
       printf("Warning client %p tried to send an INFO packet on a incompatable "
              "mode.\n",

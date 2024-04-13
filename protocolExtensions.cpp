@@ -1,4 +1,5 @@
 #include "protocolExtensions.hpp"
+#include "wispServer.hpp"
 #include "wispValidation.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -52,8 +53,8 @@ void send_info(SEND_CALLBACK_TYPE, void *id) {
     *(uint8_t *)((char *)dataPacket + cursor) = extension.id;
     cursor += sizeof(uint8_t);
 
-    *(uint8_t *)((char *)dataPacket + cursor) = extension.size;
-    cursor += sizeof(uint8_t);
+    *(uint32_t *)((char *)dataPacket + cursor) = extension.size;
+    cursor += sizeof(uint32_t);
 
     memcpy((char *)dataPacket + cursor, extension.payload, extension.size);
     cursor += extension.size;
@@ -85,3 +86,38 @@ void send_info(SEND_CALLBACK_TYPE, void *id) {
  * 6161 6161 6161 6161 6161 6161 6161 6161
  * 6161 6161 6162
  */
+
+void parse_info_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
+                       char *data, size_t length) {
+
+  uint8_t clientMajorVersion = *(uint8_t *)((char *)data);
+  if (clientMajorVersion > MAJOR_VERSION || clientMajorVersion < 1) {
+    set_exit_packet(sendCallback, id, 0, ERROR_INCOMPATABLE);
+    return;
+  }
+  uint8_t clientMinorVersion = *(uint8_t *)((char *)data + sizeof(uint8_t));
+
+  size_t cursor = sizeof(uint8_t) * 2;
+  while (cursor < length) {
+    uint8_t extensionId = *(uint8_t *)((char *)data + cursor);
+    cursor += sizeof(uint8_t);
+
+    uint32_t size = *(uint32_t *)((char *)data + cursor);
+    cursor += sizeof(uint32_t);
+
+    switch (extensionId) {
+    case PROTO_EXTENSION_UDP: {
+      break;
+    }
+    default: {
+      set_exit_packet(sendCallback, id, 0, ERROR_INCOMPATABLE);
+#ifdef DEBUG
+      printf("Client %p try to access proto extension %i\n", id, extensionId);
+#endif // DEBUG
+      return;
+    }
+    }
+
+    cursor += size;
+  }
+}

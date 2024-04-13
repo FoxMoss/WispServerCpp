@@ -53,9 +53,9 @@ The Makefile also needs a obj/ directory.
         - [ ] 0x48 Server Blocked Host 
         - [x] 0x49 Server Throttling
         - [x] 0x81 Client Memory Error (N/A)
-- [ ] V2
-    - [ ] Protocol Extensions
-        - [ ] 0x01 UDP (Supports UDP without proto)
+- [x] V2
+    - [x] Protocol Extension Parsing
+        - [x] 0x01 UDP Extension 
         - [ ] 0x02 Password Authentication
 
 # Credits
