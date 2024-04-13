@@ -15,9 +15,11 @@ int port;
 void showHelp(int ret) {
 
   printf("Usage: wispserver [options] <port>\n");
-  printf(" --packet-ratelimit <limit>\t The ammount of socket packets that "
+  printf(" --packet-ratelimit <limit>\t\t The ammount of socket packets that "
          "can be sent from a single websocket per minute.\n");
-  printf(" --help\t\t\t\t Shows this help menu.\n");
+  printf(" --match-compatability <version>\t Disables features that need a "
+         "higher version.\n");
+  printf(" --help\t\t\t\t\t Shows this help menu.\n");
 #ifdef DEBUG
   printf("\nCompiled with the debug flag\n");
 #endif // DEBUG
@@ -42,6 +44,7 @@ int main(int argv, char *argc[]) {
   int option_index = 0;
   const struct option options[] = {
       {"packet-ratelimit", required_argument, NULL, 'c'},
+      {"match-compatability", required_argument, NULL, 'm'},
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0}};
   option_index = 0;
@@ -49,6 +52,16 @@ int main(int argv, char *argc[]) {
   while ((control = getopt_long(argv, argc, "", options, &option_index)) !=
          -1) {
     switch (control) {
+    case 'm': {
+      if (!isValidInt(optarg)) {
+        printf(
+            "%s: for option --match-compatability value must be an integer.\n",
+            argc[0]);
+        showHelp(-1);
+      }
+      matchCompatability = std::stoi(optarg);
+      break;
+    }
     case 'c': {
       if (!isValidInt(optarg)) {
         printf("%s: for option --connect-ratelimit value must be an integer.\n",
@@ -78,7 +91,8 @@ int main(int argv, char *argc[]) {
     port = std::stoi(argc[i]);
   }
 
-  std::cout << "Starting on port " << port << "\n";
+  std::cout << "Starting on port " << port << " attempting Wisp V"
+            << matchCompatability << "\n";
 
   std::vector<std::thread *> threads(std::thread::hardware_concurrency());
 

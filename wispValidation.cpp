@@ -34,6 +34,10 @@ WISP_PACKET_TYPE validatePacket(char *buffer, size_t size) {
     if (size != PACKET_SIZE((size_t)sizeof(uint8_t)))
       return WISP_NULL;
     return WISP_CLOSE;
+  case WISP_INFO:
+    if (size < PACKET_SIZE((size_t)sizeof(uint8_t) + sizeof(uint8_t)))
+      return WISP_NULL;
+    return WISP_INFO;
   default:
     return WISP_NULL;
   }

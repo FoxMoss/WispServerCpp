@@ -1,4 +1,5 @@
 #include "interface.hpp"
+#include "protocolExtensions.hpp"
 #include "wispServer.hpp"
 #include "wispValidation.hpp"
 #include <bits/types/error_t.h>
@@ -71,6 +72,18 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
     set_exit_packet(sendCallback, id, recvPacket->streamId);
     break;
   }
+
+  case WISP_INFO: {
+    if (matchCompatability >= 2) {
+      printf("Not implemented\n");
+    } else {
+      printf("Warning client %p tried to send an INFO packet on a incompatable "
+             "mode.\n",
+             id);
+    }
+    exit(-1);
+    break;
+  }
   }
 
   free(recvPacket);
@@ -82,7 +95,11 @@ void open_interface(SEND_CALLBACK_TYPE, void *id) {
   initPacket->type = WISP_CONTINUE;
   *(uint32_t *)((char *)&initPacket->payload - 3) = 0x80;
 
-  (sendCallback)(initPacket, initSize, id, false);
+  sendCallback(initPacket, initSize, id, false);
+
+  if (matchCompatability >= 2) {
+    send_info(sendCallback, id);
+  }
 }
 
 void close_interface(SEND_CALLBACK_TYPE, void *id) { close_sockets(id); }
