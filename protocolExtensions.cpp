@@ -31,7 +31,7 @@ void send_info(SEND_CALLBACK_TYPE, void *id) {
     auto dataForExt = getDataForExtension(extension);
     if (dataForExt.has_value()) {
       allExtensions.push_back(dataForExt.value());
-      totalPayloadSize += sizeof(uint8_t) + sizeof(uint8_t) + dataForExt->size;
+      totalPayloadSize += sizeof(uint8_t) + sizeof(uint32_t) + dataForExt->size;
     }
   }
 
@@ -65,27 +65,6 @@ void send_info(SEND_CALLBACK_TYPE, void *id) {
 
   sendCallback(dataPacket, dataSize, id, false);
 }
-
-/* EX PARSE
- * 0500 0000 0002 0101 0002 0b08 0001 7573
- * 6572 6e61 6d65 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6161 6161 6161 6161 6161 6161
- * 6161 6161 6162
- */
 
 void parse_info_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
                        char *data, size_t length) {

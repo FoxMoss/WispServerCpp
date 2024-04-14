@@ -87,7 +87,6 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
              "mode.\n",
              id);
     }
-    exit(-1);
     break;
   }
   }
