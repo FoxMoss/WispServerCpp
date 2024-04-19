@@ -1,5 +1,6 @@
 #include "wispServer.hpp"
 #include "wispValidation.hpp"
+#include "wispnet.hpp"
 #include <arpa/inet.h>
 #include <asm-generic/errno.h>
 #include <byteswap.h>
@@ -17,13 +18,11 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
+#include <sys/un.h>
 #include <thread>
 #include <unistd.h>
 #include <utility>
 #include <vector>
-
-std::vector<SocketReference> socketManager;
-std::mutex socketGaurd;
 
 void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
                  void *id) {
@@ -38,16 +37,39 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
     type = SOCK_DGRAM;
   }
 
+  struct sockaddr *addrOut = (struct sockaddr *)malloc(
+      sizeof(struct sockaddr_in) + sizeof(struct sockaddr_in6) +
+      sizeof(sockaddr_un));
+
+  struct hostent *dns = gethostbyname(payload->hostname);
+
+  if (strcmp(payload->hostname, "wispnet") == 0) {
+    reference.wispNet = true;
+
+    struct sockaddr_un *addr = (struct sockaddr_un *)addrOut;
+    reference.descriptor = socket(AF_UNIX, SOCK_STREAM, 0);
+    addr->sun_family = AF_UNIX;
+    strcpy(addr->sun_path, "/tmp/wispnet");
+
+    if (connect(reference.descriptor, addrOut, sizeof(sockaddr_un)) < 0) {
+      set_exit_packet(sendCallback, id, streamId, ERROR_UNKNOWN);
+      return;
+    }
+
+    char *sendIdData = (char *)malloc(sizeof(uint8_t) + sizeof(void *));
+    *(uint8_t *)(sendIdData) = 0xFF;
+    *(void **)(sendIdData + sizeof(uint8_t)) = id;
+    send(reference.descriptor, sendIdData, sizeof(uint8_t) + sizeof(void *), 0);
+    free(sendIdData);
+
+    goto skipNormalCreation;
+  }
+
   reference.descriptor = socket(AF_INET, type, 0);
   if (reference.descriptor < 0) {
     set_exit_packet(sendCallback, id, streamId, ERROR_UNKNOWN);
     return;
   }
-
-  struct hostent *dns = gethostbyname(payload->hostname);
-
-  struct sockaddr *addrOut = (struct sockaddr *)malloc(
-      sizeof(struct sockaddr_in) + sizeof(struct sockaddr_in6));
 
   if (dns == NULL) { // IP addr
     struct sockaddr_in *address = (struct sockaddr_in *)addrOut;
@@ -93,6 +115,7 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
     return;
   }
   reference.addr = addrOut;
+skipNormalCreation:
 
   socketGaurd.lock();
   socketManager.push_back(reference);
@@ -104,7 +127,6 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
 
   std::thread watch(watch_thread, streamId, sendCallback, id);
   watch.detach();
-  // watch_thread(streamId, sendCallback, id);
 }
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
   SocketReference copy;
@@ -185,6 +207,7 @@ void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId,
 
   sendCallback(initPacket, initSize - 3, id, false);
 }
+
 void set_continue_packet(uint32_t bufferRemaining, SEND_CALLBACK_TYPE, void *id,
                          uint32_t streamId) {
 

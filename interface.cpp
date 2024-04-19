@@ -69,7 +69,7 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 
   case WISP_CLOSE:
   default: {
-    set_exit_packet(sendCallback, id, recvPacket->streamId);
+    // close_stream(id, recvPacket->streamId);
     break;
   }
 

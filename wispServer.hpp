@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <pthread.h>
 #include <string>
 #include <vector>
@@ -71,10 +72,11 @@ struct WispPacket {
 
 struct SocketReference {
   int descriptor;
-  uint32_t streamId;
+  int64_t streamId;
   uint8_t type; // 0x01 == tcp 0x02 == udp
   void *id;
   struct sockaddr *addr;
+  bool wispNet = false;
 };
 
 void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId = 0,
@@ -89,3 +91,6 @@ void set_data_packet(char *data, size_t size, uint32_t streamId,
                      SEND_CALLBACK_TYPE, void *id);
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id);
 void close_sockets(void *id);
+
+inline std::vector<SocketReference> socketManager;
+inline std::mutex socketGaurd;

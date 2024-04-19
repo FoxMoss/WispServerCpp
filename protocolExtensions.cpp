@@ -84,6 +84,20 @@ void parse_info_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
     uint32_t size = *(uint32_t *)((char *)data + cursor);
     cursor += sizeof(uint32_t);
 
+    bool found = false;
+    for (auto extensionIndex : suportedExtensions) {
+      if (extensionIndex == extensionId) {
+        found = true;
+      }
+    }
+    if (!found) {
+      set_exit_packet(sendCallback, id, 0, ERROR_INCOMPATABLE);
+#ifdef DEBUG
+      printf("Client %p try to access proto extension %i\n", id, extensionId);
+#endif // DEBUG
+      return;
+    }
+
     switch (extensionId) {
     case PROTO_EXTENSION_UDP: {
       break;

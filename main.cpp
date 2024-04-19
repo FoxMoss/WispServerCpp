@@ -1,6 +1,7 @@
 #include "cppBinding.hpp"
 #include "wispServer.hpp"
 #include "wispValidation.hpp"
+#include "wispnet.hpp"
 #include <bits/getopt_core.h>
 #include <cstddef>
 #include <cstdio>
@@ -94,6 +95,7 @@ int main(int argv, char *argc[]) {
   std::cout << "Starting on port " << port << " attempting Wisp V"
             << matchCompatability << "\n";
 
+  init_wispnet();
   std::vector<std::thread *> threads(std::thread::hardware_concurrency());
 
   std::transform(
