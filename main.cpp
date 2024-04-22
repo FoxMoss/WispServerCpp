@@ -30,17 +30,6 @@ void showHelp(int ret) {
   exit(ret);
 }
 
-bool isValidInt(char *buf) {
-  size_t buflen = strlen(buf);
-
-  for (size_t i = 0; i < buflen; i++) {
-    if (buf[i] > '9' || buf[i] < '0') {
-      return false;
-    }
-  }
-  return true;
-}
-
 int main(int argv, char *argc[]) {
   int option_index = 0;
   const struct option options[] = {

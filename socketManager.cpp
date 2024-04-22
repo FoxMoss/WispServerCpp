@@ -1,3 +1,4 @@
+#include "cachemap.hpp"
 #include "wispServer.hpp"
 #include "wispValidation.hpp"
 #include "wispnet.hpp"
@@ -16,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <sys/un.h>
@@ -31,6 +33,7 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
   reference.streamId = streamId;
   reference.id = id;
   reference.type = payload->type;
+  reference.port = payload->port;
 
   int type = SOCK_STREAM;
   if (payload->type == 0x02) {
@@ -43,8 +46,9 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
 
   struct hostent *dns = gethostbyname(payload->hostname);
 
+  size_t hostnameLen = strlen(payload->hostname);
+
   if (strcmp(payload->hostname, "wispnet") == 0) {
-    reference.wispNet = true;
 
     struct sockaddr_un *addr = (struct sockaddr_un *)addrOut;
     reference.descriptor = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -61,6 +65,34 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
     *(void **)(sendIdData + sizeof(uint8_t)) = id;
     send(reference.descriptor, sendIdData, sizeof(uint8_t) + sizeof(void *), 0);
     free(sendIdData);
+
+    goto skipNormalCreation;
+  }
+
+  if (strcmp(((char *)payload->hostname + hostnameLen - 5), ".wisp") == 0) {
+    *((char *)payload->hostname + hostnameLen - 5) = '\0';
+    reference.wispNet = true;
+    if (!isValidInt(payload->hostname)) {
+#ifdef DEBUG
+      printf("Invalid wispnet connection");
+#endif // DEBUG
+      set_exit_packet(sendCallback, id, streamId, ERROR_INVALID_CONNECTION);
+      return;
+    }
+    auto possibleId = wsMap.find(std::stoul(payload->hostname));
+    if (!possibleId.has_value()) {
+#ifdef DEBUG
+      printf("Invalid wispnet connection");
+#endif
+      set_exit_packet(sendCallback, id, streamId, ERROR_INVALID_CONNECTION);
+      return;
+    }
+    reference.targetId = possibleId.value();
+#ifdef DEBUG
+    printf("Wispnet connection for %p : %i\n", reference.targetId,
+           reference.streamId);
+#endif
+    reference.connectionId = std::rand() % sizeof(uint32_t);
 
     goto skipNormalCreation;
   }
@@ -256,11 +288,14 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
   }
 
   ssize_t error;
-  if (idData.type == TCP_TYPE) {
+  if (idData.type == TCP_TYPE && !idData.wispNet) {
     error = send(idData.descriptor, data, length, 0);
-  } else {
+  } else if (!idData.wispNet) { // udp
     error = sendto(idData.descriptor, data, length, 0, idData.addr,
                    sizeof(struct sockaddr));
+  } else { // wispnet
+    send_wispnet_data(idData.targetId, sendCallback, idData.id,
+                      idData.connectionId, idData.port, data, length);
   }
   if (error == -1) {
     switch (errno) {

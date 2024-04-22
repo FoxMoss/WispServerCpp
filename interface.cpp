@@ -95,6 +95,7 @@ void message_interface(SEND_CALLBACK_TYPE, std::string msg, void *id) {
 }
 
 void open_interface(SEND_CALLBACK_TYPE, void *id) {
+  wsMap.openKey(id);
   size_t initSize = PACKET_SIZE((size_t)sizeof(uint32_t));
   struct WispPacket *initPacket = (struct WispPacket *)calloc(1, initSize);
   initPacket->type = WISP_CONTINUE;
@@ -107,4 +108,7 @@ void open_interface(SEND_CALLBACK_TYPE, void *id) {
   }
 }
 
-void close_interface(SEND_CALLBACK_TYPE, void *id) { close_sockets(id); }
+void close_interface(SEND_CALLBACK_TYPE, void *id) {
+  wsMap.deleteKey(id);
+  close_sockets(id);
+}

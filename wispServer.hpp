@@ -1,12 +1,16 @@
 #pragma once
 
+#include "cachemap.hpp"
 #include "interface.hpp"
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <pthread.h>
+#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -76,7 +80,12 @@ struct SocketReference {
   uint8_t type; // 0x01 == tcp 0x02 == udp
   void *id;
   struct sockaddr *addr;
+
+  // for wispnet
   bool wispNet = false;
+  uint16_t port;
+  void *targetId;
+  uint32_t connectionId;
 };
 
 void set_exit_packet(SEND_CALLBACK_TYPE, void *id, uint32_t streamId = 0,
@@ -93,4 +102,6 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id);
 void close_sockets(void *id);
 
 inline std::vector<SocketReference> socketManager;
+inline CacheMap<void *, std::optional<uint32_t>>
+    wsMap([](void *) { return (uint32_t)(rand() % UINT32_MAX); }, {});
 inline std::mutex socketGaurd;

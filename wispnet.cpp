@@ -1,5 +1,6 @@
 
 #include "wispnet.hpp"
+#include "wispServer.hpp"
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -7,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <mutex>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -36,8 +38,9 @@ void watch_wispnet(int fd) {
     std::thread(watch_wispnet_thread, client).detach();
   }
 }
-std::vector<WispNetPort>
-    openPorts; // TODO: free notes otherwise infinite memory glitch
+std::vector<WispNetPort> openPorts;
+std::mutex portLock;
+
 void watch_wispnet_thread(int client) {
   char largeBuffer[1024];
   size_t bufSize = 1024;
@@ -47,6 +50,9 @@ void watch_wispnet_thread(int client) {
     ssize_t bufferAddition = recv(client, largeBuffer, 1024, 0);
     if (bufferAddition >= 1024) {
       printf("Fix wispnet code to be better\n");
+    }
+    if (bufferAddition == -1) {
+      break;
     }
 
     switch (*(uint8_t *)(largeBuffer)) {
@@ -80,15 +86,62 @@ void watch_wispnet_thread(int client) {
              cursor);
 
       portObject.deviceId = deviceId;
+      portLock.lock();
       openPorts.push_back(portObject);
+      portLock.unlock();
       break;
     }
     case 0xFF: {
       deviceId = *(void **)((char *)largeBuffer + sizeof(uint8_t));
+      send_wispnet_init(deviceId, client);
     }
     default:
       break;
     }
   }
+  portLock.lock();
+  for (auto portIterator = openPorts.begin(); portIterator != openPorts.end();
+       portIterator++) {
+    if (portIterator->deviceId == deviceId) {
+      free(portIterator->note);
+      openPorts.erase(portIterator);
+    }
+  }
+  portLock.unlock();
   close(client);
+}
+void send_wispnet_init(void *targetId, int fd) {
+  const size_t size = sizeof(uint8_t) + sizeof(uint32_t);
+  char data[size];
+  data[0] = 0x01;
+  if (!wsMap[targetId].has_value()) {
+    printf("WispNet init expected target id to have a value\n");
+    exit(-1);
+  }
+  *(uint32_t *)((char *)data + sizeof(uint8_t)) = wsMap[targetId].value();
+  send(fd, data, size, 0);
+}
+
+void send_wispnet_data(void *targetId, SEND_CALLBACK_TYPE, void *fromId,
+                       uint32_t connectionId, uint16_t port, char *data,
+                       size_t size) {
+  bool found = false;
+  WispNetPort portInfo;
+  portLock.lock();
+  for (auto portDevice : openPorts) {
+    if (portDevice.deviceId == targetId && portDevice.port == port) {
+      found = true;
+      portInfo = portDevice;
+    }
+  }
+  portLock.unlock();
+  if (!found) {
+    return;
+  }
+
+  size_t dataSize = PACKET_SIZE(sizeof(uint32_t) + sizeof(uint32_t) +
+                                sizeof(uint16_t) + size);
+  void *dataPacket = calloc(1, dataSize);
+
+  sendCallback(dataPacket, dataSize, targetId, false);
 }
