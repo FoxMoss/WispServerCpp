@@ -1,6 +1,6 @@
-
 #include "wispnet.hpp"
 #include "wispServer.hpp"
+#include "wispValidation.hpp"
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -16,8 +16,7 @@
 #include <unistd.h>
 #include <vector>
 
-void init_wispnet() {
-
+void init_wispnet(SEND_CALLBACK_TYPE) {
   int fd = socket(AF_UNIX, SOCK_STREAM, 0);
   sockaddr_un addr;
   addr.sun_family = AF_UNIX;
@@ -28,23 +27,23 @@ void init_wispnet() {
     exit(-1);
   }
 
-  listen(fd, 10);
-  std::thread(watch_wispnet, fd).detach();
+  listen(fd, -1);
+  std::thread(watch_wispnet, fd, sendCallback).detach();
 }
 
-void watch_wispnet(int fd) {
+void watch_wispnet(int fd, SEND_CALLBACK_TYPE) {
   while (true) {
     int client = accept(fd, NULL, NULL);
-    std::thread(watch_wispnet_thread, client).detach();
+    std::thread(watch_wispnet_thread, client, sendCallback).detach();
   }
 }
 std::vector<WispNetPort> openPorts;
 std::mutex portLock;
 
-void watch_wispnet_thread(int client) {
+void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
   char largeBuffer[1024];
-  size_t bufSize = 1024;
   void *deviceId = NULL;
+  uint32_t streamId = 0;
 
   while (true) {
     ssize_t bufferAddition = recv(client, largeBuffer, 1024, 0);
@@ -79,6 +78,7 @@ void watch_wispnet_thread(int client) {
       ++cursor; // null term
 
       portObject.note = (char *)malloc(cursor);
+      portObject.fd = client;
 
       memcpy(portObject.note,
              (char *)&largeBuffer + sizeof(uint8_t) + sizeof(uint16_t) +
@@ -91,8 +91,62 @@ void watch_wispnet_thread(int client) {
       portLock.unlock();
       break;
     }
+    case WNC_SERVER_DATA: {
+      uint32_t clientId = *((char *)largeBuffer + sizeof(uint8_t));
+      uint32_t connectionId =
+          *((char *)largeBuffer + sizeof(uint8_t) + sizeof(uint32_t));
+      uint16_t port = *((char *)largeBuffer + sizeof(uint8_t) +
+                        sizeof(uint32_t) + sizeof(uint32_t));
+      size_t dataSize = bufferAddition - (sizeof(uint8_t) + sizeof(uint32_t) +
+                                          sizeof(uint32_t) + sizeof(uint16_t));
+
+      auto clientPtr = wsMap.find(clientId);
+
+      if (!clientPtr.has_value()) {
+        send_wispnet_exit(deviceId, connectionId, port);
+        break;
+      }
+
+      bool found = false;
+      uint32_t streamId = 0;
+      socketGaurd.lock();
+      for (auto index = socketManager.begin(); index != socketManager.end();
+           index++) {
+        if (index->id == clientPtr && index->connectionId == connectionId &&
+            index->port == port && index->targetId == deviceId) {
+          found = true;
+          streamId = index->streamId;
+          break;
+        }
+      }
+      socketGaurd.unlock();
+
+      if (!clientPtr.has_value() || !found) {
+        send_wispnet_exit(deviceId, connectionId, port);
+        break;
+      }
+
+      set_data_packet((char *)largeBuffer + sizeof(uint8_t) + sizeof(uint32_t) +
+                          sizeof(uint32_t) + sizeof(uint16_t),
+                      dataSize, streamId, sendCallback, clientPtr.value());
+      break;
+    }
     case 0xFF: {
+      if (deviceId != 0) {
+        break;
+      }
       deviceId = *(void **)((char *)largeBuffer + sizeof(uint8_t));
+      streamId =
+          *(uint32_t *)((char *)largeBuffer + sizeof(uint8_t) + sizeof(void *));
+      socketGaurd.lock();
+      for (auto index = socketManager.begin(); index != socketManager.end();
+           index++) {
+        if (index->id == deviceId && index->streamId == streamId) {
+          index->serverFd = client;
+          break;
+        }
+      }
+      socketGaurd.unlock();
       send_wispnet_init(deviceId, client);
     }
     default:
@@ -115,7 +169,9 @@ void send_wispnet_init(void *targetId, int fd) {
   char data[size];
   data[0] = 0x01;
   if (!wsMap[targetId].has_value()) {
+#ifdef DEBUG
     printf("WispNet init expected target id to have a value\n");
+#endif // DEBUG
     exit(-1);
   }
   *(uint32_t *)((char *)data + sizeof(uint8_t)) = wsMap[targetId].value();
@@ -132,6 +188,7 @@ void send_wispnet_data(void *targetId, SEND_CALLBACK_TYPE, void *fromId,
     if (portDevice.deviceId == targetId && portDevice.port == port) {
       found = true;
       portInfo = portDevice;
+      break;
     }
   }
   portLock.unlock();
@@ -139,9 +196,54 @@ void send_wispnet_data(void *targetId, SEND_CALLBACK_TYPE, void *fromId,
     return;
   }
 
-  size_t dataSize = PACKET_SIZE(sizeof(uint32_t) + sizeof(uint32_t) +
-                                sizeof(uint16_t) + size);
-  void *dataPacket = calloc(1, dataSize);
+  const size_t dataSize = sizeof(uint8_t) + sizeof(uint32_t) +
+                          sizeof(uint32_t) + sizeof(uint16_t) + size;
+  char dataPacket[dataSize];
 
-  sendCallback(dataPacket, dataSize, targetId, false);
+  *(uint8_t *)dataPacket = 0x04;
+  *(uint32_t *)((char *)dataPacket + sizeof(uint8_t)) = wsMap[fromId].value();
+  *(uint32_t *)((char *)dataPacket + sizeof(uint8_t) + sizeof(uint32_t)) =
+      connectionId;
+  *(uint16_t *)((char *)dataPacket + sizeof(uint8_t) + sizeof(uint32_t) +
+                sizeof(uint32_t)) = port;
+  memcpy((char *)dataPacket + sizeof(uint8_t) + sizeof(uint32_t) +
+             sizeof(uint32_t) + sizeof(uint16_t),
+         data, size);
+
+  send(portInfo.fd, dataPacket, dataSize, 0);
+}
+void send_wispnet_connect(void *targetId, SEND_CALLBACK_TYPE, void *fromId,
+                          uint32_t connectionId, uint8_t type, uint16_t port) {
+  bool found = false;
+  WispNetPort portInfo;
+  portLock.lock();
+  for (auto portDevice : openPorts) {
+    if (portDevice.deviceId == targetId && portDevice.port == port) {
+      found = true;
+      portInfo = portDevice;
+      break;
+    }
+  }
+  portLock.unlock();
+  if (!found) {
+    return;
+  }
+
+  const size_t dataSize = sizeof(uint8_t) + sizeof(uint32_t) +
+                          sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint16_t);
+  char dataPacket[dataSize];
+
+  *(uint8_t *)dataPacket = 0x03;
+  *(uint32_t *)((char *)dataPacket + sizeof(uint8_t)) = wsMap[fromId].value();
+  *(uint32_t *)((char *)dataPacket + sizeof(uint8_t) + sizeof(uint32_t)) =
+      connectionId;
+  *(uint8_t *)((char *)dataPacket + sizeof(uint8_t) + sizeof(uint32_t) +
+               sizeof(uint32_t)) = type;
+  *(uint16_t *)((char *)dataPacket + sizeof(uint8_t) + sizeof(uint32_t) +
+                sizeof(uint32_t) + sizeof(uint8_t)) = port;
+
+  send(portInfo.fd, dataPacket, dataSize, 0);
+}
+void send_wispnet_exit(void *targetId, uint32_t connectionId, uint16_t port) {
+  printf("WispNet exit is to be implemented. \n");
 }

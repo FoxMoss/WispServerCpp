@@ -11,3 +11,4 @@ void on_message(uWS::WebSocket<SSL, true, PerSocketData> *ws,
                 std::string_view message, uWS::OpCode opCode);
 void on_open(uWS::TemplatedApp<false> *app,
              uWS::WebSocket<SSL, true, PerSocketData> *ws);
+void send_callback(void *buffer, size_t size, void *id, bool exit = false);

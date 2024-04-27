@@ -76,13 +76,15 @@ struct WispPacket {
 
 struct SocketReference {
   int descriptor;
-  int64_t streamId;
+  uint32_t streamId;
   uint8_t type; // 0x01 == tcp 0x02 == udp
   void *id;
   struct sockaddr *addr;
 
   // for wispnet
   bool wispNet = false;
+  bool wispNetServer = false;
+  int serverFd;
   uint16_t port;
   void *targetId;
   uint32_t connectionId;

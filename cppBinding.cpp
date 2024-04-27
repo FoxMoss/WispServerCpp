@@ -20,7 +20,7 @@
 #include <uWebSockets/WebSocketProtocol.h>
 #include <vector>
 
-void send_callback(void *buffer, size_t size, void *id, bool exit = false) {
+void send_callback(void *buffer, size_t size, void *id, bool exit) {
   uWS::WebSocket<SSL, true, PerSocketData> *ws =
       (uWS::WebSocket<SSL, true, PerSocketData> *)id;
 

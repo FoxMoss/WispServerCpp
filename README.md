@@ -22,7 +22,6 @@ Usage: wispserver [options] <port>
 ## Install
 
 Requirements:
-- zlib
 - pthreads
 - uWebSockets
 

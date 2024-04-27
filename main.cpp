@@ -84,9 +84,9 @@ int main(int argv, char *argc[]) {
   std::cout << "Starting on port " << port << " attempting Wisp V"
             << matchCompatability << "\n";
 
-  init_wispnet();
-  std::vector<std::thread *> threads(std::thread::hardware_concurrency());
+  init_wispnet(send_callback);
 
+  std::vector<std::thread *> threads(std::thread::hardware_concurrency());
   std::transform(
       threads.begin(), threads.end(), threads.begin(), [](std::thread * /*t*/) {
         return new std::thread([]() {

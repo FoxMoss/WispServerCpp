@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -55,16 +56,12 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
     addr->sun_family = AF_UNIX;
     strcpy(addr->sun_path, "/tmp/wispnet");
 
+    reference.wispNetServer = true;
+
     if (connect(reference.descriptor, addrOut, sizeof(sockaddr_un)) < 0) {
       set_exit_packet(sendCallback, id, streamId, ERROR_UNKNOWN);
       return;
     }
-
-    char *sendIdData = (char *)malloc(sizeof(uint8_t) + sizeof(void *));
-    *(uint8_t *)(sendIdData) = 0xFF;
-    *(void **)(sendIdData + sizeof(uint8_t)) = id;
-    send(reference.descriptor, sendIdData, sizeof(uint8_t) + sizeof(void *), 0);
-    free(sendIdData);
 
     goto skipNormalCreation;
   }
@@ -93,6 +90,10 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
            reference.streamId);
 #endif
     reference.connectionId = std::rand() % sizeof(uint32_t);
+
+    send_wispnet_connect(reference.targetId, sendCallback, reference.id,
+                         reference.connectionId, reference.type,
+                         reference.port);
 
     goto skipNormalCreation;
   }
@@ -146,8 +147,8 @@ void open_socket(ConnectPayload *payload, uint32_t streamId, SEND_CALLBACK_TYPE,
     }
     return;
   }
-  reference.addr = addrOut;
 skipNormalCreation:
+  reference.addr = addrOut;
 
   socketGaurd.lock();
   socketManager.push_back(reference);
@@ -157,9 +158,13 @@ skipNormalCreation:
 #endif // DEBUG
   socketGaurd.unlock();
 
-  std::thread watch(watch_thread, streamId, sendCallback, id);
-  watch.detach();
+  if (!reference.wispNet) {
+
+    std::thread watch(watch_thread, streamId, sendCallback, id);
+    watch.detach();
+  }
 }
+
 void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
   SocketReference copy;
   bool found = false;
@@ -183,9 +188,19 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
 
   char buffer[READ_SIZE];
   ssize_t size;
+  if (copy.wispNetServer) {
+    char *sendIdData =
+        (char *)malloc(sizeof(uint8_t) + sizeof(void *) + sizeof(uint32_t));
+    *(uint8_t *)(sendIdData) = 0xFF;
+    *(void **)(sendIdData + sizeof(uint8_t)) = id;
+    *(uint32_t *)(sendIdData + sizeof(uint8_t) + sizeof(void *)) = streamId;
+    send(copy.descriptor, sendIdData,
+         sizeof(uint8_t) + sizeof(void *) + sizeof(uint32_t), 0);
+    free(sendIdData);
+  }
+
   if (copy.type == TCP_TYPE) {
     while ((size = recv(copy.descriptor, buffer, READ_SIZE, 0)) > 0) {
-
       set_data_packet(buffer, size, copy.streamId, sendCallback, copy.id);
     }
   } else { // udp
@@ -287,16 +302,19 @@ void forward_data_packet(uint32_t streamId, SEND_CALLBACK_TYPE, void *id,
     return;
   }
 
-  ssize_t error;
-  if (idData.type == TCP_TYPE && !idData.wispNet) {
-    error = send(idData.descriptor, data, length, 0);
-  } else if (!idData.wispNet) { // udp
-    error = sendto(idData.descriptor, data, length, 0, idData.addr,
-                   sizeof(struct sockaddr));
-  } else { // wispnet
+  ssize_t error = 0;
+  if (!idData.wispNet || idData.wispNetServer) {
+    if (idData.type == TCP_TYPE) {
+      error = send(idData.descriptor, data, length, 0);
+    } else { // udp
+      error = sendto(idData.descriptor, data, length, 0, idData.addr,
+                     sizeof(struct sockaddr));
+    }
+  } else {
     send_wispnet_data(idData.targetId, sendCallback, idData.id,
                       idData.connectionId, idData.port, data, length);
   }
+
   if (error == -1) {
     switch (errno) {
     case ECONNRESET:
