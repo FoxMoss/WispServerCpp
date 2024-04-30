@@ -92,11 +92,11 @@ void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
       break;
     }
     case WNC_SERVER_DATA: {
-      uint32_t clientId = *((char *)largeBuffer + sizeof(uint8_t));
-      uint32_t connectionId =
-          *((char *)largeBuffer + sizeof(uint8_t) + sizeof(uint32_t));
-      uint16_t port = *((char *)largeBuffer + sizeof(uint8_t) +
-                        sizeof(uint32_t) + sizeof(uint32_t));
+      uint32_t clientId = *(uint32_t *)((char *)largeBuffer + sizeof(uint8_t));
+      uint32_t connectionId = *(uint32_t *)((char *)largeBuffer +
+                                            sizeof(uint8_t) + sizeof(uint32_t));
+      uint16_t port = *(uint16_t *)((char *)largeBuffer + sizeof(uint8_t) +
+                                    sizeof(uint32_t) + sizeof(uint32_t));
       size_t dataSize = bufferAddition - (sizeof(uint8_t) + sizeof(uint32_t) +
                                           sizeof(uint32_t) + sizeof(uint16_t));
 
@@ -129,6 +129,42 @@ void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
       set_data_packet((char *)largeBuffer + sizeof(uint8_t) + sizeof(uint32_t) +
                           sizeof(uint32_t) + sizeof(uint16_t),
                       dataSize, streamId, sendCallback, clientPtr.value());
+      break;
+    }
+    case WNC_SERVER_EXIT: {
+      uint32_t clientId = *(uint32_t *)((char *)largeBuffer + sizeof(uint8_t));
+      uint32_t connectionId = *(uint32_t *)((char *)largeBuffer +
+                                            sizeof(uint8_t) + sizeof(uint32_t));
+      uint16_t port = *(uint16_t *)((char *)largeBuffer + sizeof(uint8_t) +
+                                    sizeof(uint32_t) + sizeof(uint32_t));
+
+      auto clientPtr = wsMap.find(clientId);
+
+      if (!clientPtr.has_value()) {
+        send_wispnet_exit(deviceId, connectionId, port);
+        break;
+      }
+
+      bool found = false;
+      uint32_t streamId = 0;
+      socketGaurd.lock();
+      for (auto index = socketManager.begin(); index != socketManager.end();
+           index++) {
+        if (index->id == clientPtr && index->connectionId == connectionId &&
+            index->port == port && index->targetId == deviceId) {
+          found = true;
+          streamId = index->streamId;
+          break;
+        }
+      }
+      socketGaurd.unlock();
+
+      if (!clientPtr.has_value() || !found) {
+        send_wispnet_exit(deviceId, connectionId, port);
+        break;
+      }
+
+      set_exit_packet(sendCallback, clientPtr.value(), streamId);
       break;
     }
     case 0xFF: {
