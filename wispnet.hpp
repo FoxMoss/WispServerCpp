@@ -14,6 +14,7 @@ void send_wispnet_data(void *targetId, SEND_CALLBACK_TYPE, void *fromId,
 void send_wispnet_connect(void *targetId, SEND_CALLBACK_TYPE, void *fromId,
                           uint32_t connectionId, uint8_t type, uint16_t port);
 void send_wispnet_exit(void *targetId, uint32_t connectionId, uint16_t port);
+void send_wispnet_registry(int fd);
 
 enum WISPNET_CLIENT_PROTO_TYPES {
   WNC_PROBE = 0x01,
@@ -33,6 +34,6 @@ struct WispNetPort {
   uint16_t port;
   bool discoverable;
   char *note;
-
+  size_t noteSize;
   int fd;
 };

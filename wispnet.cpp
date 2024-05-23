@@ -47,6 +47,7 @@ void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
 
   while (true) {
     ssize_t bufferAddition = recv(client, largeBuffer, 1024, 0);
+    // TODO: Packet concatination
     if (bufferAddition >= 1024) {
       printf("Fix wispnet code to be better\n");
     }
@@ -55,6 +56,10 @@ void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
     }
 
     switch (*(uint8_t *)(largeBuffer)) {
+    case WNC_PROBE: {
+      send_wispnet_registry(client);
+      break;
+    }
     case WNC_OPEN: {
       if (deviceId == NULL) {
         printf("Invalid unix socket\n");
@@ -66,6 +71,13 @@ void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
       portObject.port = *(uint16_t *)((char *)largeBuffer + sizeof(uint8_t));
       portObject.discoverable =
           *(bool *)((char *)largeBuffer + sizeof(uint8_t) + sizeof(uint16_t));
+      portLock.lock();
+      for (auto port : openPorts) {
+        if (port.port == portObject.port && deviceId == portObject.deviceId) {
+          break;
+        }
+      }
+      portLock.unlock();
 
       size_t cursor = 0;
       for (; cursor < bufferAddition -
@@ -84,6 +96,7 @@ void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
              (char *)&largeBuffer + sizeof(uint8_t) + sizeof(uint16_t) +
                  sizeof(bool),
              cursor);
+      portObject.noteSize = cursor;
 
       portObject.deviceId = deviceId;
       portLock.lock();
@@ -211,6 +224,7 @@ void send_wispnet_init(void *targetId, int fd) {
     exit(-1);
   }
   *(uint32_t *)((char *)data + sizeof(uint8_t)) = wsMap[targetId].value();
+
   send(fd, data, size, 0);
 }
 
@@ -282,4 +296,41 @@ void send_wispnet_connect(void *targetId, SEND_CALLBACK_TYPE, void *fromId,
 }
 void send_wispnet_exit(void *targetId, uint32_t connectionId, uint16_t port) {
   printf("WispNet exit is to be implemented. \n");
+}
+void send_wispnet_registry(int fd) {
+  size_t payloadSize = sizeof(uint8_t); // type
+  portLock.lock();
+  for (auto port : openPorts) {
+    if (!wsMap[port.deviceId].has_value()) {
+      continue;
+    }
+    payloadSize +=
+        sizeof(uint32_t) + sizeof(uint16_t) + port.noteSize; // deviceId + port
+  }
+  char buffer[payloadSize];
+  size_t cursor = 0;
+  *(uint8_t *)((char *)&buffer + cursor) = WNS_REGISTRY;
+  cursor += sizeof(uint8_t);
+  for (auto port : openPorts) {
+    auto deviceIdProcessed = wsMap[port.deviceId];
+    if (!deviceIdProcessed.has_value()) {
+      continue;
+    }
+    *(uint32_t *)((char *)&buffer + cursor) = deviceIdProcessed.value();
+    cursor += sizeof(uint32_t);
+    *(uint16_t *)((char *)&buffer + cursor) = port.port;
+    cursor += sizeof(uint16_t);
+    memcpy((char *)&buffer + cursor, port.note, port.noteSize);
+    cursor += port.noteSize;
+  }
+  portLock.unlock();
+#ifdef DEBUG
+  if (cursor != payloadSize) {
+    printf("Registry has errors wrote up to %zu but has space for %zu\n",
+           cursor, payloadSize);
+    return;
+  }
+#endif // DEBUG
+
+  send(fd, buffer, payloadSize, 0);
 }
