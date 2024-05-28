@@ -196,7 +196,8 @@ void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
         }
       }
       socketGaurd.unlock();
-      send_wispnet_init(deviceId, client);
+      send_wispnet_init(deviceId, streamId, sendCallback, client);
+      break;
     }
     default:
       break;
@@ -213,7 +214,8 @@ void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE) {
   portLock.unlock();
   close(client);
 }
-void send_wispnet_init(void *targetId, int fd) {
+void send_wispnet_init(void *targetId, uint32_t streamId, SEND_CALLBACK_TYPE,
+                       int fd) {
   const size_t size = sizeof(uint8_t) + sizeof(uint32_t);
   char data[size];
   data[0] = 0x01;

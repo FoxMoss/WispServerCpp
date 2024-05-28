@@ -7,7 +7,8 @@ void init_wispnet(SEND_CALLBACK_TYPE);
 void watch_wispnet(int sock, SEND_CALLBACK_TYPE);
 void watch_wispnet_thread(int client, SEND_CALLBACK_TYPE);
 
-void send_wispnet_init(void *targetId, int fd);
+void send_wispnet_init(void *targetId, uint32_t streamId, SEND_CALLBACK_TYPE,
+                       int fd);
 void send_wispnet_data(void *targetId, SEND_CALLBACK_TYPE, void *fromId,
                        uint32_t connectionId, uint16_t port, char *data,
                        size_t size);

@@ -189,14 +189,12 @@ void watch_thread(uint32_t streamId, SEND_CALLBACK_TYPE, void *id) {
   char buffer[READ_SIZE];
   ssize_t size;
   if (copy.wispNetServer) {
-    char *sendIdData =
-        (char *)malloc(sizeof(uint8_t) + sizeof(void *) + sizeof(uint32_t));
+    char sendIdData[(sizeof(uint8_t) + sizeof(void *) + sizeof(uint32_t))];
     *(uint8_t *)(sendIdData) = 0xFF;
     *(void **)(sendIdData + sizeof(uint8_t)) = id;
     *(uint32_t *)(sendIdData + sizeof(uint8_t) + sizeof(void *)) = streamId;
     send(copy.descriptor, sendIdData,
          sizeof(uint8_t) + sizeof(void *) + sizeof(uint32_t), 0);
-    free(sendIdData);
   }
 
   if (copy.type == TCP_TYPE) {
